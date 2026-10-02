@@ -8,7 +8,7 @@ export default function Navbar() {
         <Link to="/" className="flex items-center gap-3">
           <img src={logoFihnec} alt="Logotipo FIHNEC" className="h-10 w-auto" />
           <div className="leading-tight">
-            <p className="font-display text-sm font-bold text-night">SAEL Jóvenes · FIHNEC</p>
+            <p className="font-display text-sm font-bold text-night">SAEL Damas · FIHNEC</p>
           </div>
         </Link>
         <Link

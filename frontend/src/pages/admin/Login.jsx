@@ -52,7 +52,7 @@ export default function Login() {
           </div>
 
           <h1 className="mt-4 text-center font-display text-2xl font-bold text-ink">Panel administrativo</h1>
-          <p className="mt-1 text-center text-sm text-ink/50">SAEL Jóvenes · FIHNEC</p>
+          <p className="mt-1 text-center text-sm text-ink/50">SAEL Damas · FIHNEC</p>
 
           {error && <p className="mt-4 rounded-lg bg-ember/10 p-3 text-sm text-ember">{error}</p>}
 

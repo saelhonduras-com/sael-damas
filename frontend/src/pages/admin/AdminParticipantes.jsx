@@ -86,12 +86,6 @@ export default function AdminParticipantes() {
   const [estadisticas, setEstadisticas] = useState(null);
   const [eventoActual, setEventoActual] = useState(null);
 
-  // --- Módulo de cobro (se abre al marcar "Registrado" en Inscribiéndose ahora
-  // o en el Detalle del participante — ambos caminos pasan por aquí) ---
-  const [cobrando, setCobrando] = useState(null); // { inscripcion, eventoId, onGuardado, cuentaId, banco_o_recibo, observaciones_pago } | null
-  const [opcionesInscripcion, setOpcionesInscripcion] = useState([]); // las 3 cuentas: boletos_evento, boletos_bancos, cortesia
-  const [guardandoCobro, setGuardandoCobro] = useState(false);
-
   const [error, setError] = useState('');
 
   // --- Carga de "Todos los participantes" ---
@@ -212,6 +206,8 @@ export default function AdminParticipantes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buscarActual]);
 
+  // SAEL DAMAS: no hay módulo de cobro — marcar/desmarcar "Registrado" va
+  // directo al backend, sin pasar por ningún modal de pago.
   async function marcarPresencialEnEventoActual(inscripcionId, valor) {
     setError('');
     try {
@@ -220,112 +216,22 @@ export default function AdminParticipantes() {
         i.inscripcion_id === inscripcionId ? { ...i, registrado_presencial: valor } : i
       ));
       setRegistradosActual((prev) => prev + (valor ? 1 : -1));
+      refrescarResumen();
     } catch (err) {
       setError(mensajeError(err));
     }
   }
 
-  // Al DESMARCAR "Registrado" se pide confirmación con advertencia — un
-  // clic accidental o rápido aquí puede afectar el dinero ya capturado
-  // (monto, método de pago) y el boleto asignado. Al confirmar, se
-  // actualiza la lista localmente (ya tienes el botón "↻ Refrescar"
-  // aparte, si necesitas que el Resumen del sidebar también se ponga
-  // al día).
+  // Al DESMARCAR "Registrado" se pide confirmación — un clic accidental o
+  // rápido aquí afecta la asistencia ya contada. Al confirmar, se actualiza
+  // la lista localmente (ya tienes el botón "↻ Refrescar" aparte, si
+  // necesitas que el Resumen del sidebar también se ponga al día).
   function pedirDesmarcar(inscripcion) {
     pedirConfirmacion({
-      mensaje: `Vas a desmarcar "Registrado" para ${inscripcion.nombre_completo}. Si tenía boleto asignado, se intentará devolver al contador (solo si era el último entregado — si no, el número queda anulado). Su información de pago deja de contar en Control de Ingresos. ¿Confirmas?`,
+      mensaje: `Vas a desmarcar "Registrado" para ${inscripcion.nombre_completo}. ¿Confirmas?`,
       textoConfirmar: 'Sí, desmarcar',
-      onConfirmar: async () => {
-        setError('');
-        try {
-          await api.put(`/admin/inscripciones/${inscripcion.inscripcion_id}/presencial`, { registrado_presencial: false });
-          setInscripcionesActual((prev) => prev.map((i) =>
-            i.inscripcion_id === inscripcion.inscripcion_id ? { ...i, registrado_presencial: false } : i
-          ));
-          setRegistradosActual((prev) => prev - 1);
-          refrescarResumen();
-        } catch (err) {
-          setError(mensajeError(err));
-        }
-      },
+      onConfirmar: () => marcarPresencialEnEventoActual(inscripcion.inscripcion_id, false),
     });
-  }
-
-  // Al MARCAR "Registrado" (false → true), en vez de guardar directo se
-  // abre el módulo de cobro — es opcional (se puede guardar en blanco),
-  // pero siempre se ofrece la oportunidad de capturarlo, para que no se
-  // quede vacío por accidente. Al DESMARCAR se pide confirmación (ver
-  // pedirDesmarcar arriba), ya no es una corrección silenciosa.
-  //
-  // Acepta eventoId y onGuardado como parámetros opcionales para que
-  // TAMBIÉN se pueda abrir desde el checkbox del Detalle del participante
-  // (ver "Registrado presencial" más abajo) — ahí el evento no siempre es
-  // el actual, y hay que recargar el detalle en vez de la lista.
-  async function abrirCobro(inscripcion, eventoId = eventoActual?.id, onGuardado) {
-    setError('');
-    setCobrando({
-      inscripcion,
-      eventoId,
-      onGuardado: onGuardado || (() => { setBuscarActual(''); cargarInscripcionesEventoActual(''); }),
-      cuentaId: '', // '' = sin seleccionar (opcional)
-      banco_o_recibo: '',
-      observaciones_pago: '',
-    });
-    try {
-      // Las 4 opciones vienen directo del Catálogo de Cuentas, buscadas
-      // por su clave interna (no por nombre/código, que son libres de
-      // editar): boletos_evento (4.1.1), boletos_bancos (4.1.2),
-      // cortesia (4.1.4), y boletos_tarjeta (4.1.5).
-      const { data: cuentas } = await api.get(`/admin/eventos/${eventoId}/valores-cuenta`, { params: { tipo: 'ingreso' } });
-      const claves = ['boletos_evento', 'boletos_bancos', 'boletos_tarjeta', 'cortesia'];
-      const opciones = claves
-        .map((clave) => cuentas.find((c) => c.clave_sistema === clave))
-        .filter(Boolean)
-        .map((c) => ({
-          cuenta_id: c.cuenta_id,
-          nombre: c.nombre,
-          monto: c.monto || 0,
-          clave: c.clave_sistema,
-          // Cada cuenta implica su propio método de pago y si pide banco/recibo:
-          metodo_pago: c.clave_sistema === 'boletos_evento' ? 'efectivo'
-            : c.clave_sistema === 'boletos_bancos' ? 'transferencia'
-            : c.clave_sistema === 'boletos_tarjeta' ? 'tarjeta'
-            : null,
-          pideBanco: c.clave_sistema === 'boletos_bancos' || c.clave_sistema === 'boletos_tarjeta',
-        }));
-      setOpcionesInscripcion(opciones);
-      if (opciones.length === 0) {
-        setError('No hay cuentas de Aportación por Boletos ni Cortesía configuradas — ajústalas en Entradas de Efectivo.');
-      }
-    } catch (err) {
-      setError(mensajeError(err));
-    }
-  }
-
-  async function guardarCobro() {
-    if (!cobrando.cuentaId) {
-      setError('"Inscripciones (Alimentación)" es obligatorio para guardar.');
-      return;
-    }
-    const opcion = opcionesInscripcion.find((o) => String(o.cuenta_id) === String(cobrando.cuentaId));
-    setGuardandoCobro(true);
-    setError('');
-    try {
-      await api.put(`/admin/inscripciones/${cobrando.inscripcion.inscripcion_id}/pago`, {
-        alimentacion_monto: opcion.monto,
-        metodo_pago: opcion.metodo_pago,
-        banco_o_recibo: opcion.pideBanco ? cobrando.banco_o_recibo : null,
-        observaciones_pago: cobrando.observaciones_pago,
-      });
-      const onGuardado = cobrando.onGuardado;
-      setCobrando(null);
-      refrescarResumen();
-      onGuardado();
-    } catch (err) {
-      setError(mensajeError(err));
-    } finally {
-      setGuardandoCobro(false);
-    }
   }
 
   function eliminarInscripcion(inscripcionId, registrado) {
@@ -421,21 +327,11 @@ export default function AdminParticipantes() {
     });
   }
 
-  // Igual que abrirCobro más arriba: al MARCAR, abre el módulo de cobro
-  // (evento propio de esta fila del historial, y recarga el Detalle al
-  // guardar) en vez de confirmar directo. Al DESMARCAR, sigue igual —
-  // llama directo al backend, sin pedir cobro.
-  function marcarPresencial(inscripcionId, valor, eventoId) {
-    if (valor) {
-      abrirCobro(
-        { inscripcion_id: inscripcionId, nombre_completo: seleccionado?.nombre_completo },
-        eventoId,
-        () => recargarDetalle(seleccionado.id)
-      );
-      return;
-    }
+  // SAEL DAMAS: marcar/desmarcar en el historial del Detalle también va
+  // directo al backend, sin módulo de cobro.
+  function marcarPresencial(inscripcionId, valor) {
     setError('');
-    api.put(`/admin/inscripciones/${inscripcionId}/presencial`, { registrado_presencial: false })
+    api.put(`/admin/inscripciones/${inscripcionId}/presencial`, { registrado_presencial: valor })
       .then(async () => {
         await recargarDetalle(seleccionado.id);
         refrescarResumen();
@@ -522,7 +418,7 @@ export default function AdminParticipantes() {
         )}
       </div>
 
-      {error && !cobrando && <p className="mt-4 rounded-lg bg-ember/10 p-3 text-sm text-ember">{error}</p>}
+      {error && <p className="mt-4 rounded-lg bg-ember/10 p-3 text-sm text-ember">{error}</p>}
 
       {vista === 'lista' && (
         <div className="mt-4">
@@ -628,7 +524,7 @@ export default function AdminParticipantes() {
                                     checked={i.registrado_presencial}
                                     onChange={(e) => {
                                       if (e.target.checked) {
-                                        abrirCobro(i);
+                                        marcarPresencialEnEventoActual(i.inscripcion_id, true);
                                       } else {
                                         pedirDesmarcar(i);
                                       }
@@ -788,7 +684,7 @@ export default function AdminParticipantes() {
                     <input
                       type="checkbox"
                       checked={i.registrado_presencial}
-                      onChange={(e) => marcarPresencial(i.id, e.target.checked, i.evento_id)}
+                      onChange={(e) => marcarPresencial(i.id, e.target.checked)}
                     />
                     Registrado presencial
                   </label>
@@ -1023,69 +919,6 @@ export default function AdminParticipantes() {
                 className="rounded-full bg-ember px-4 py-1.5 text-sm font-semibold text-white hover:bg-ember-light"
               >
                 {confirmacion.textoConfirmar}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {cobrando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
-            <h3 className="font-display text-lg font-bold text-ink">Módulo de cobro</h3>
-            <p className="mt-1 text-sm text-ink/50">{cobrando.inscripcion.nombre_completo}</p>
-            <p className="mt-1 text-xs text-ink/40">
-              "Inscripciones (Alimentación)" es obligatorio. Banco/recibo y observaciones son opcionales.
-            </p>
-            {error && <p className="mt-3 rounded-lg bg-ember/10 p-3 text-sm text-ember">{error}</p>}
-
-            <div className="mt-4 space-y-4">
-              <label>
-                <span className="mb-1 block text-xs font-semibold text-ink/60">Inscripciones (Alimentación)</span>
-                <select
-                  value={cobrando.cuentaId}
-                  onChange={(e) => setCobrando((c) => ({ ...c, cuentaId: e.target.value }))}
-                  className={claseInput}
-                >
-                  <option value="">Seleccionar…</option>
-                  {opcionesInscripcion.map((o) => (
-                    <option key={o.cuenta_id} value={o.cuenta_id}>{o.nombre} (L. {o.monto})</option>
-                  ))}
-                </select>
-                {opcionesInscripcion.length === 0 && (
-                  <p className="mt-1 text-xs text-ember">No hay cuentas de boletos ni Cortesía configuradas — ajústalas en Entradas de Efectivo.</p>
-                )}
-              </label>
-
-              {(() => {
-                const opcionElegida = opcionesInscripcion.find((o) => String(o.cuenta_id) === String(cobrando.cuentaId));
-                const pideBanco = opcionElegida?.pideBanco;
-                return (
-                  <label>
-                    <span className="mb-1 block text-xs font-semibold text-ink/60">Banco ó # de recibo</span>
-                    <input
-                      type="text" value={pideBanco ? cobrando.banco_o_recibo : ''}
-                      onChange={(e) => setCobrando((c) => ({ ...c, banco_o_recibo: e.target.value }))}
-                      disabled={!pideBanco}
-                      className={`${claseInput} disabled:bg-ink/5 disabled:text-ink/30`}
-                      placeholder={pideBanco ? '' : 'No aplica para esta cuenta'}
-                    />
-                  </label>
-                );
-              })()}
-
-              <label>
-                <span className="mb-1 block text-xs font-semibold text-ink/60">Observaciones</span>
-                <input type="text" value={cobrando.observaciones_pago} onChange={(e) => setCobrando((c) => ({ ...c, observaciones_pago: e.target.value }))} className={claseInput} />
-              </label>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setCobrando(null)} className="rounded-full border border-ink/20 px-4 py-1.5 text-sm font-semibold text-ink/70 hover:bg-ink/5">
-                Cancelar
-              </button>
-              <button onClick={guardarCobro} disabled={guardandoCobro} className="rounded-full bg-[#007334] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#005c29] disabled:opacity-50">
-                {guardandoCobro ? 'Guardando…' : 'Guardar y confirmar'}
               </button>
             </div>
           </div>

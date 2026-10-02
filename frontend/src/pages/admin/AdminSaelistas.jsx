@@ -390,7 +390,7 @@ export default function AdminSaelistas() {
           </div>
         )}
       </div>
-      <p className="mt-1 text-sm text-ink/50">Servidores voluntarios de SAEL Jóvenes. Administrado solo desde el panel — sin login propio.</p>
+      <p className="mt-1 text-sm text-ink/50">Servidoras voluntarias de SAEL Damas. Administrado solo desde el panel — sin login propio.</p>
 
       {/* Pestañas (solo en lista/asistencia) + enlace temporal de
           autoservicio en la misma línea — el enlace SIEMPRE está visible,

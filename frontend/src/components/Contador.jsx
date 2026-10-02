@@ -30,16 +30,19 @@ export default function Contador({ fechaObjetivo, horaObjetivo, etiqueta }) {
 
   return (
     <div className="mt-10 inline-flex flex-col items-center gap-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.45)]">{etiqueta}</p>
-      <div className="flex gap-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-parchment/85 [text-shadow:0_1px_6px_rgba(0,0,0,0.65)]">{etiqueta}</p>
+      <div className="flex gap-3">
         {[
           { valor: restante.dias, texto: 'días' },
           { valor: restante.horas, texto: 'horas' },
           { valor: restante.minutos, texto: 'min' },
         ].map((u) => (
-          <div key={u.texto} className="flex flex-col items-center rounded-xl bg-white px-4 py-2 shadow-sm">
-            <span className="font-display text-2xl font-bold text-[#0C447C]">{String(u.valor).padStart(2, '0')}</span>
-            <span className="text-[10px] uppercase tracking-wide text-[#185FA5]">{u.texto}</span>
+          <div key={u.texto} className="overflow-hidden rounded-2xl bg-parchment/95 shadow-lg backdrop-blur-sm">
+            <div className="h-1 bg-[#D1677A]" />
+            <div className="flex flex-col items-center px-5 py-3">
+              <span className="font-display text-3xl font-bold tabular-nums text-[#3A1420]">{String(u.valor).padStart(2, '0')}</span>
+              <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">{u.texto}</span>
+            </div>
           </div>
         ))}
       </div>

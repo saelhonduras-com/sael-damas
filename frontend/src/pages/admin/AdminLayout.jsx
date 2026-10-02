@@ -6,6 +6,11 @@ import api from '../../api';
 // Menú agrupado por tipo de tarea, con los 3 colores oficiales de
 // FIHNEC (uno por grupo) más un derivado más oscuro del dorado para
 // que el texto tenga suficiente contraste sobre blanco.
+//
+// SAEL DAMAS: a diferencia de Hombres/Jóvenes, este sistema no usa
+// Habitaciones, Entradas & Salidas, Control de Ingresos & Egresos ni
+// Catálogo de Cuentas — esas pantallas simplemente no aparecen en el
+// menú (el código sigue existiendo, por si algún día se necesita).
 const GRUPOS_MENU = [
   {
     titulo: 'Operación',
@@ -15,16 +20,6 @@ const GRUPOS_MENU = [
       { ruta: '/admin/participantes', etiqueta: 'Participantes', modulo: 'participantes', icono: '👥' },
       { ruta: '/admin/diplomas', etiqueta: 'Diplomas', modulo: 'diplomas', icono: '🎓' },
       { ruta: '/admin/saelistas', etiqueta: 'Saelistas', modulo: 'saelistas', icono: '🙋' },
-      { ruta: '/admin/habitaciones', etiqueta: 'Habitaciones', modulo: 'habitaciones', icono: '🛏️' },
-    ],
-  },
-  {
-    titulo: 'Finanzas',
-    color: '#007334', // verde
-    items: [
-      { ruta: '/admin/entradas-y-salidas', etiqueta: 'Entradas & Salidas', modulo: 'entradas_salidas', icono: '💵' },
-      { ruta: '/admin/control-de-ingresos-egresos', etiqueta: 'Control de Ingresos & Egresos', modulo: 'entradas_salidas', icono: '📊' },
-      { ruta: '/admin/catalogo-de-cuentas', etiqueta: 'Catálogo de Cuentas', modulo: 'catalogo_cuentas', icono: '📚' },
     ],
   },
   {
@@ -140,7 +135,6 @@ export default function AdminLayout() {
                 <div className="flex justify-between"><dt className="text-ink/50">Confirmados</dt><dd className="font-bold text-ink">{estadisticas.total}</dd></div>
                 <div className="flex justify-between border-t border-[#1F3464]/15 pt-1"><dt className="text-ink/50">Nacionales</dt><dd className="font-bold text-ink">{estadisticas.nacional}</dd></div>
                 <div className="flex justify-between"><dt className="text-ink/50">Extranjeros</dt><dd className="font-bold text-ink">{estadisticas.extranjero}</dd></div>
-                <div className="flex justify-between border-t border-[#1F3464]/15 pt-1"><dt className="text-ink/50">Boletos entregados</dt><dd className="font-bold text-ink">{estadisticas.total}</dd></div>
                 <div className="flex justify-between border-t border-[#1F3464]/15 pt-1"><dt className="text-ink/50">Saelistas asistiendo</dt><dd className="font-bold text-ink">{estadisticas.saelistas_asistencia ?? 0}</dd></div>
               </dl>
             </div>

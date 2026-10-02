@@ -153,32 +153,36 @@ export default function Home() {
   return (
     <div>
       {/* HERO */}
-      <section className="relative overflow-hidden bg-night grain-overlay">
-        {/* Foto de fondo, usada como marca de agua — duotono navy/azul
-            (foto en escala de grises + degradado con mix-blend-mode),
-            siguiendo la paleta de complementarios de FIHNEC para SAEL
-            Jóvenes (#1F3464 navy / #1D71B8 azul).
-            Archivo: frontend/public/images/hero-jovenes.jpg */}
+      <section className="relative overflow-hidden bg-[#2A0F17] grain-overlay">
+        {/* Foto de fondo, usada como marca de agua — duotono vino/rosado
+            (foto en escala de grises + degradado con mix-blend-mode).
+            Antes la capa oscura final usaba "night" (azul marino, el
+            color de SAEL Jóvenes) y eso hacía que todo el hero se viera
+            azulado sin importar el degradado. Ahora esa capa también es
+            un vino oscuro (#2A0F17), para que el conjunto se sienta
+            cálido/rosado de punta a punta — color secundario de FIHNEC,
+            distinto al azul de Jóvenes (#1D71B8).
+            Archivo: frontend/public/images/hero-damas.jpg */}
         <img
-          src="/images/hero-jovenes.jpg"
+          src="/images/hero-damas.jpg"
           alt=""
           aria-hidden="true"
           className="absolute inset-0 h-full w-full object-cover object-[center_75%] grayscale"
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-night to-[#1D71B8] mix-blend-color" />
-        <div className="absolute inset-0 bg-night/60" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#3A1420] to-[#D1677A] mix-blend-color" />
+        <div className="absolute inset-0 bg-[#2A0F17]/55" />
 
         <div className="relative mx-auto max-w-5xl px-5 pb-20 pt-16 text-center">
           <p className="text-xs font-bold uppercase tracking-[0.35em] text-[#FDC41F] [text-shadow:0_1px_8px_rgba(0,0,0,0.5)]">
             FIHNEC
           </p>
-          <p className="mb-4 mt-2 text-xs font-semibold uppercase tracking-[0.15em] text-parchment/70 [text-shadow:0_1px_8px_rgba(0,0,0,0.5)]">
+          <p className="mb-4 mt-2 text-xs font-semibold uppercase tracking-[0.15em] text-parchment/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.7)]">
             Fraternidad Internacional de Hombres de Negocios del Evangelio Completo
           </p>
           <h1 className="font-display text-4xl font-bold text-parchment [text-shadow:0_2px_16px_rgba(0,0,0,0.65)] sm:text-6xl">
-            Seminario Avanzado de <span className="text-[#1D71B8]">Entrenamiento de Líderes</span>
+            Seminario Avanzado de <span className="text-[#F28DA0]">Entrenamiento de Líderes</span>
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-balance text-lg text-parchment/70 [text-shadow:0_1px_10px_rgba(0,0,0,0.5)]">
+          <p className="mx-auto mt-5 max-w-2xl text-balance text-lg text-parchment/90 [text-shadow:0_1px_10px_rgba(0,0,0,0.7)]">
             Un encuentro personal, mes a mes, donde hombres, mujeres y jóvenes se acercan al propósito
             que Dios tiene para sus vidas. Once encuentros al año, tres días cada uno.
           </p>

@@ -134,7 +134,7 @@ router.get('/admin/saelistas/pdf', requireAuth, requireModulo('saelistas', 'cons
       } catch (e) {
         var xTexto = cajaX;
       }
-      doc.fillColor('#1F3464').fontSize(16).text('SAEL Jóvenes · FIHNEC', xTexto, 18, { lineBreak: false });
+      doc.fillColor('#1F3464').fontSize(16).text('SAEL Damas · FIHNEC', xTexto, 18, { lineBreak: false });
       doc.fontSize(10).fillColor('#E40521').text('Saelistas', xTexto, 40, { lineBreak: false });
 
       const anchoTotales = 220;
