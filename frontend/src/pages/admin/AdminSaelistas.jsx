@@ -594,7 +594,7 @@ export default function AdminSaelistas() {
             <div><dt className="text-ink/50">Celular</dt><dd className="font-medium text-ink">{seleccionado.celular || '—'}</dd></div>
             <div><dt className="text-ink/50">Email</dt><dd className="font-medium text-ink">{seleccionado.email || '—'}</dd></div>
             <div><dt className="text-ink/50">Estado civil</dt><dd className="font-medium text-ink">{seleccionado.estado_civil || '—'}</dd></div>
-            <div><dt className="text-ink/50">Nombre de esposa</dt><dd className="font-medium text-ink">{seleccionado.nombre_esposa || '—'}</dd></div>
+            <div><dt className="text-ink/50">Nombre de esposo</dt><dd className="font-medium text-ink">{seleccionado.nombre_esposa || '—'}</dd></div>
             <div><dt className="text-ink/50">Hijos / Nietos</dt><dd className="font-medium text-ink">{seleccionado.hijos_cantidad ?? '—'} / {seleccionado.nietos_cantidad ?? '—'}</dd></div>
             <div><dt className="text-ink/50">Profesión</dt><dd className="font-medium text-ink">{seleccionado.profesion || '—'}</dd></div>
             <div><dt className="text-ink/50">Contacto de emergencia</dt><dd className="font-medium text-ink">{seleccionado.contacto_emergencia_telefono || '—'}</dd></div>
@@ -678,7 +678,7 @@ export default function AdminSaelistas() {
               </select>
             </label>
             <label>
-              <span className="mb-1 block text-xs font-semibold text-ink/60">Nombre de esposa</span>
+              <span className="mb-1 block text-xs font-semibold text-ink/60">Nombre de esposo</span>
               <input type="text" value={form.nombre_esposa} onChange={(e) => setForm((f) => ({ ...f, nombre_esposa: e.target.value }))} className={claseInput} />
             </label>
             <label>

@@ -40,66 +40,67 @@ export const MUNICIPIOS_POR_DEPARTAMENTO = {
   "Yoro": ["Arenal", "El Negrito", "El Progreso", "Jocon", "Morazan", "Olanchito", "Santa Rita", "Sulaco", "Victoria", "Yorito", "Yoro"]
 };
 
+// Zonas propias de SAEL Damas (estructura distinta a la de Jóvenes/Hombres).
 export const ZONAS_FIHNEC = [
-  "Zona Noroccidente",
-  "Zona Sur",
-  "Zona Olancho",
-  "Zona Ocotepeque",
-  "Zona El Paraíso",
-  "Zona Centro 2",
-  "Zona Atlántida",
-  "Zona Comayagua",
   "Zona Centro 1",
-  "Zona La Paz",
-  "Zona Copán",
-  "Zona Lempira",
-  "Zona Norte",
-  "Zona Siguatepeque",
-  "Zona Aguán",
+  "Zona Centro 2",
+  "Zona Centro 3",
+  "Zona Centro 4",
+  "Zona Centro Occidente 1",
+  "Zona Centro Occidente 2A",
+  "Zona Centro Occidente 2B",
+  "Zona Centro Occidente 3",
+  "Zona Centro Occidente 4",
+  "Zona Oriental 1A",
+  "Zona Oriental 1B",
+  "Zona Oriental 2",
+  "Zona Atlántica Insular",
+  "Zona Atlántica 1",
+  "Zona Atlántica 2",
+  "Zona Aguán 1",
+  "Zona Aguán 2",
+  "Zona Aguán 3",
+  "Zona Norte 1",
+  "Zona Norte 2",
+  "Zona Norte 3",
+  "Zona Norte 4",
+  "Zona Nor Occidente",
+  "Zona Occidente 1",
+  "Zona Occidente 2",
+  "Zona Occidente 3",
+  "Zona Occidente 4",
+  "Zona Occidente 5",
+  "Zona Sur",
 ];
 
-// Igual al catálogo de SFL, sin "Servidor del SFL" (no aplica a SAEL) —
+// Cargos propios de SAEL Damas (distintos a los de Jóvenes/Hombres) —
 // se usa para "Cargo actual" del participante y también del Saelista.
 export const CARGOS_FIHNEC = [
-  "Coordinador Nacional",
-  "Sub Coordinador Nacional",
-  "Tesorero Nacional",
-  "Secretario Nacional",
-  "Coordinador Nacional de Eventos Estratégicos",
-  "Sub Coordinador Nacional de Eventos Estratégicos",
-  "Coordinador Nacional de Intercesión",
-  "Coordinador Nacional de Capacitación",
-  "Coordinador Nacional de Literatura",
-  "Coordinador Nacional de Comunicaciones",
-  "Coordinador Nacional de Membresía",
-  "Coordinador Nacional de SAEL Varones",
-  "Sub Coordinador Nacional de SAEL Varones",
-  "Coordinador Nacional de SAEL Señoritas",
-  "Sub Coordinador Nacional de SAEL Señoritas",
-  "Coordinador Zonal",
-  "Regional",
-  "Coordinador Zonal de Eventos Estratégicos",
-  "Coordinador Zonal de Comunicaciones",
-  "Coordinador Zonal de Intercesión",
-  "Coordinador de Grupo",
-  "Sub Coordinador de Grupo",
-  "Secretario de Grupo",
-  "Tesorero de Grupo",
-  "Coordinador de Intercesión de Grupo",
-  "Servidor",
+  "Coordinadora Nacional",
+  "Sub Coordinadora Nacional",
+  "Secretaria Nacional",
+  "Tesorería Nacional",
+  "Coordinadora Zonal",
+  "Coordinadora Nacional SFL",
+  "Coordinadora Nacional Oración e Intercesión",
+  "Coordinadora Nacional SAEL",
+  "Coordinadora de Membresía",
+  "Coordinadora Nacional Capacitación",
+  "Encargada de Eventos Estratégicos",
+  "Servidora",
 ];
 
 // Igual al catálogo de SFL, con "Unión Libre" agregado (requerido por SAEL)
-export const ESTADOS_CIVILES = ["Soltero", "Casado", "Viudo", "Divorciado", "Unión Libre"];
+export const ESTADOS_CIVILES = ["Soltera", "Casada", "Viuda", "Divorciada", "Unión Libre"];
 
 // ============================================================
 // Catálogos del módulo Saelistas
 // ============================================================
 
 // "Cargos desempeñados (histórico)" del Saelista — a diferencia de
-// CARGOS_FIHNEC (cargo actual), aquí SÍ se incluye "Servidor del SFL",
+// CARGOS_FIHNEC (cargo actual), aquí SÍ se incluye "Servidora del SFL",
 // porque es un registro de vida completo, incluyendo su paso por SFL.
-export const CARGOS_HISTORICO = [...CARGOS_FIHNEC, "Servidor del SFL"];
+export const CARGOS_HISTORICO = [...CARGOS_FIHNEC, "Servidora del SFL"];
 
 export const TIPOS_TESTIMONIO = [
   "No comparte",
