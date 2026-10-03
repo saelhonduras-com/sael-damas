@@ -1,41 +1,25 @@
-name: Keep-alive SAEL Hombres
+name: Mantener el backend despierto (evento 3-18 octubre, 6am-10pm Honduras)
 
-# Mantiene despierto el backend en Render durante el horario de
-# inscripciones (6am-10pm hora Honduras, UTC-6), para que nadie se
-# encuentre con la pantalla de "despertando" al inscribirse.
+# Corre SOLO entre el 3 y el 18 de octubre de 2026, y dentro de eso, solo entre las 6:00 a.m. y
+# las 10:00 p.m. hora de Honduras (UTC-6). Fuera de esas fechas, este archivo no hace nada — el
+# backend vuelve a dormirse normal, como siempre.
 #
-# IMPORTANTE: este workflow tiene fecha de vencimiento (ver el paso
-# "Verificar fecha" abajo). Después de esa fecha, hazte el hábito de
-# BORRAR este archivo por completo (igual que se hizo con el de SFL) —
-# si no se borra, el cron sigue programado para siempre y el próximo
-# año se activaría solo, sin que nadie se acuerde de por qué.
-
+# ⚠️ IMPORTANTE: este horario se repite automáticamente CADA AÑO en estas mismas fechas de
+# octubre, a menos que borres o desactives este archivo después del evento. No se apaga solo de
+# forma permanente — hay que quitarlo a mano (o comentar la línea "schedule") cuando ya no se
+# necesite.
+#
+# Nota técnica: el rango de días (3-19) incluye un día extra a propósito, para cubrir
+# correctamente la noche del 18 de octubre (por la diferencia de horario entre Honduras y UTC,
+# que es lo que usa GitHub Actions para programar tareas).
 on:
   schedule:
-    # 6:00am a 11:59pm hora Honduras = 12:00 a 23:59 UTC
-    - cron: '*/10 12-23 * * *'
-    # 12:00am a 3:59am hora Honduras del día siguiente = 0:00 a 3:59 UTC
-    - cron: '*/10 0-3 * * *'
-  workflow_dispatch: {}
+    - cron: '*/14 12-23,0-3 3-19 10 *'
+  workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Verificar fecha (activo solo hasta el 30 de agosto 2026)
-        id: fecha
-        run: |
-          FECHA_LIMITE="2026-08-30"
-          FECHA_HOY=$(date -u +%Y-%m-%d)
-          if [[ "$FECHA_HOY" > "$FECHA_LIMITE" ]]; then
-            echo "activo=false" >> "$GITHUB_OUTPUT"
-            echo "Fuera de la ventana de inscripciones — no se hace ping. Borra este workflow."
-          else
-            echo "activo=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Ping al backend de SAEL Hombres
-        if: steps.fecha.outputs.activo == 'true'
-        run: |
-          curl -sf https://saelhonduras-com-sael-hombres.onrender.com/api/salud-completa \
-            || echo "El ping falló, pero no se detiene el workflow por esto."
+      - name: Visitar el backend Y la base de datos, para que no se duerma ninguno
+        run: curl -sf https://sael-damas.onrender.com/api/salud-completa || echo "No respondió, pero no es grave — se reintenta en 14 minutos."
