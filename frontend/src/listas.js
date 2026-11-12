@@ -73,6 +73,34 @@ export const ZONAS_FIHNEC = [
   "Zona Sur",
 ];
 
+// Qué Zonas de SAEL Damas corresponden a cada Departamento — según el
+// Excel "Zonas de Inscripciones Hombres y Damas" (columna DAMAS, con la
+// ubicación de cada zona llevada al Departamento de Honduras al que
+// pertenece). Es el mismo criterio que usa SAEL Hombres. Se usa para
+// filtrar Zona igual que ya se filtra Municipio al elegir Departamento.
+// "Gracias a Dios" no tiene ninguna zona asignada — si se elige ese
+// departamento, el formulario muestra el catálogo completo de Zonas en
+// vez de dejar el selector vacío y bloqueado.
+export const ZONAS_POR_DEPARTAMENTO = {
+  "Atlántida": ["Zona Atlántica 1", "Zona Atlántica 2"],
+  "Choluteca": ["Zona Sur"],
+  "Colón": ["Zona Aguán 2"],
+  "Comayagua": ["Zona Centro Occidente 1", "Zona Centro Occidente 4"],
+  "Copán": ["Zona Occidente 1", "Zona Occidente 5"],
+  "Cortés": ["Zona Norte 1", "Zona Norte 2", "Zona Norte 3"],
+  "El Paraíso": ["Zona Oriental 2"],
+  "Francisco Morazán": ["Zona Centro 1", "Zona Centro 2", "Zona Centro 3", "Zona Centro 4"],
+  "Intibucá": ["Zona Centro Occidente 3"],
+  "Islas de la Bahía": ["Zona Atlántica Insular"],
+  "La Paz": ["Zona Centro Occidente 2A", "Zona Centro Occidente 2B"],
+  "Lempira": ["Zona Occidente 3", "Zona Occidente 4"],
+  "Ocotepeque": ["Zona Occidente 2"],
+  "Olancho": ["Zona Oriental 1A", "Zona Oriental 1B"],
+  "Santa Bárbara": ["Zona Nor Occidente"],
+  "Valle": ["Zona Sur"],
+  "Yoro": ["Zona Aguán 1", "Zona Aguán 3", "Zona Norte 4"],
+};
+
 // Cargos propios de SAEL Damas (distintos a los de Jóvenes/Hombres) —
 // se usa para "Cargo actual" del participante y también del Saelista.
 export const CARGOS_FIHNEC = [

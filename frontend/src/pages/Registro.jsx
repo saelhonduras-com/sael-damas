@@ -3,8 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import api, { mensajeError } from '../api';
 import {
   DEPARTAMENTOS_HONDURAS, MUNICIPIOS_POR_DEPARTAMENTO,
-  ZONAS_FIHNEC, CARGOS_FIHNEC, ESTADOS_CIVILES,
+  ZONAS_FIHNEC, ZONAS_POR_DEPARTAMENTO, CARGOS_FIHNEC, ESTADOS_CIVILES,
 } from '../listas';
+import SelectorFecha from '../components/SelectorFecha';
 
 const TOTAL_PASOS = 6;
 const NOMBRES_PASOS = ['DNI', 'Datos personales', 'Ubicación', 'Datos FIHNEC', 'Contacto de emergencia', 'Revisión'];
@@ -69,6 +70,9 @@ function Encabezado({ etiqueta }) {
   );
 }
 
+// Bandera de Honduras en SVG — evita depender del emoji 🇭🇳, que en
+// Windows a veces no se renderiza bien (mismo problema que tuvimos
+// antes con otros emojis del checklist).
 function BanderaHonduras({ className = 'h-3.5 w-5' }) {
   const estrella = '0,-1 0.22,-0.31 0.95,-0.31 0.36,0.12 0.59,0.95 0,0.5 -0.59,0.95 -0.36,0.12 -0.95,-0.31 -0.22,-0.31';
   return (
@@ -108,6 +112,10 @@ function Campo({ etiqueta, children }) {
   );
 }
 
+// Igual que Campo, pero sin <label>. Un <label> que envuelve más de un
+// elemento activable (ej. dos botones) hace que el navegador intente
+// además activar automáticamente el primero al hacer clic en cualquiera
+// de los dos — eso es lo que causaba que "No" no se quedara seleccionado.
 function CampoGrupo({ etiqueta, children }) {
   return (
     <div className="block">
@@ -119,6 +127,8 @@ function CampoGrupo({ etiqueta, children }) {
 
 const claseInput = 'w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm text-ink transition focus:border-ember focus:outline-none focus:ring-4 focus:ring-ember/10';
 
+// "18:00" (24h, como se guarda) → "6:00 p. m." (12h, estilo RAE — igual
+// al que usa Home.jsx y el formulario del SFL).
 function formatearHoraEs(horaHHMM) {
   if (!horaHHMM) return null;
   const [h, m] = horaHHMM.split(':').map(Number);
@@ -133,11 +143,19 @@ const MESES = [
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
 ];
 
+// Igual que en Home.jsx: nunca crear un Date() de una fecha-sin-hora
+// (ej. "2026-08-29") — se interpreta como medianoche UTC y, al mostrarla
+// en hora Honduras (UTC-6), se corre un día hacia atrás.
 function formatearFechaLarga(fechaISO) {
   const [anio, mes, dia] = fechaISO.slice(0, 10).split('-').map(Number);
   return `${dia} de ${MESES[mes - 1]} de ${anio}`;
 }
 
+// Mismo cálculo que hace el backend en POST /inscripciones (fecha+hora
+// límite, en hora Honduras real vía offset -06:00 explícito) — se
+// duplica aquí a propósito para poder bloquear la entrada al formulario
+// desde el frontend, sin esperar a que la persona llegue hasta el final
+// del wizard para enterarse de que ya no puede inscribirse.
 function plazoVencido(evento) {
   if (!evento?.fecha_limite_registro) return false;
   const fechaStr = evento.fecha_limite_registro.slice(0, 10);
@@ -148,13 +166,12 @@ function plazoVencido(evento) {
 
 export default function Registro() {
   const navigate = useNavigate();
-  const hoy = new Date().toISOString().slice(0, 10);
   const [eventos, setEventos] = useState(null);
   const [paso, setPaso] = useState(1);
   const [form, setForm] = useState(vacio);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
-  const [participanteExistente, setParticipanteExistente] = useState(null);
+  const [participanteExistente, setParticipanteExistente] = useState(null); // { id, nombre_completo, ... } | null
   const [editando, setEditando] = useState(false);
   const [formEdicion, setFormEdicion] = useState(null);
   const [inscripcionCompleta, setInscripcionCompleta] = useState(false);
@@ -166,21 +183,35 @@ export default function Registro() {
     api.get('/eventos').then((r) => setEventos(r.data)).catch(() => setError('No se pudo cargar la información del evento.'));
   }, []);
 
+  // Cuenta cuánto lleva cargando la página, para poder explicar la espera si
+  // el servidor está despertando tras un período de inactividad.
   useEffect(() => {
     if (eventos !== null || error) return;
     const intervalo = setInterval(() => setSegundosCargando((s) => s + 1), 1000);
     return () => clearInterval(intervalo);
   }, [eventos, error]);
 
+  // Una vez completada la inscripción, regresa solo al inicio después de
+  // un rato (con opción de irse antes con el botón manual). Se alargó a
+  // 60s porque ahora se muestra el recordatorio del equipaje completo,
+  // y hace falta más tiempo para leerlo con calma.
   useEffect(() => {
     if (!inscripcionCompleta) return;
     const temporizador = setTimeout(() => navigate('/'), 60000);
     return () => clearTimeout(temporizador);
   }, [inscripcionCompleta, navigate]);
 
+  // El evento marcado como "actual" solo sirve para inscribirse si TAMBIÉN
+  // está abierto — antes esto se pasaba por alto y dejaba pasar al DNI
+  // aunque el evento actual estuviera cerrado.
   const eventoActual = eventos?.find((ev) => ev.es_actual && ev.abierto) || eventos?.find((ev) => ev.abierto) || null;
   const municipiosDisponibles = form.departamento ? (MUNICIPIOS_POR_DEPARTAMENTO[form.departamento] || []) : [];
   const municipiosEdicion = formEdicion?.departamento ? (MUNICIPIOS_POR_DEPARTAMENTO[formEdicion.departamento] || []) : [];
+  // Si el departamento elegido no tiene zonas asignadas en el catálogo
+  // (ej. Gracias a Dios), se muestra la lista completa de zonas en vez de
+  // dejar el selector vacío y sin opciones.
+  const zonasDisponibles = form.departamento ? (ZONAS_POR_DEPARTAMENTO[form.departamento] || ZONAS_FIHNEC) : ZONAS_FIHNEC;
+  const zonasEdicion = formEdicion?.departamento ? (ZONAS_POR_DEPARTAMENTO[formEdicion.departamento] || ZONAS_FIHNEC) : ZONAS_FIHNEC;
 
   function actualizar(campo, valor) {
     setForm((f) => ({ ...f, [campo]: valor }));
@@ -214,6 +245,12 @@ export default function Registro() {
     }
   }
 
+  // Inscribe al participante al evento actual. Si el backend responde que
+  // ya estaba inscrito (409), NO lo tratamos como error — el objetivo
+  // (estar inscrito, con los datos al día) ya se cumple igual. Sin esto,
+  // alguien que solo viene a actualizar sus datos y ya estaba inscrito se
+  // quedaba atorado viendo "Ya estás inscrito a este evento." en vez de
+  // llegar a la pantalla de éxito.
   async function inscribirSiHaceFalta(participante_id) {
     try {
       await api.post('/inscripciones', { participante_id, evento_id: eventoActual.id });
@@ -257,6 +294,11 @@ export default function Registro() {
     setEditando(true);
   }
 
+  // Nombre Propio: primera letra de cada palabra en mayúscula, el resto en
+  // minúscula — sin importar cómo lo haya escrito la persona (todo
+  // mayúsculas, todo minúsculas, mezclado). Se aplica solo a los campos de
+  // texto libre (nombre, capítulo, contacto de emergencia) justo antes de
+  // enviar — nunca a los que ya vienen de una lista desplegable fija.
   function formatoNombrePropio(texto) {
     if (!texto) return texto;
     return texto
@@ -268,11 +310,10 @@ export default function Registro() {
       .join(' ');
   }
 
-  // Capítulo ahora también es obligatorio (antes se podía dejar vacío).
   function validarEdicion() {
     if (!formEdicion.nombre_completo || !formEdicion.fecha_nacimiento || !formEdicion.estado_civil) return false;
     if (!/^\d{8}$/.test(formEdicion.telefono_movil)) return false;
-    if (!formEdicion.departamento || !formEdicion.municipio || !formEdicion.zona || !formEdicion.cargo_fihnec || !formEdicion.capitulo.trim()) return false;
+    if (!formEdicion.departamento || !formEdicion.municipio || !formEdicion.capitulo.trim() || !formEdicion.zona || !formEdicion.cargo_fihnec) return false;
     if (!formEdicion.contacto_emergencia_nombre || !/^\d{8}$/.test(formEdicion.contacto_emergencia_telefono)) return false;
     return true;
   }
@@ -308,9 +349,8 @@ export default function Registro() {
     if (!/^\d{8}$/.test(form.telefono_movil)) return false;
     return true;
   }
-  // Capítulo ahora también es obligatorio (antes se podía dejar vacío).
   function validarPaso3() {
-    return form.departamento && form.municipio && form.zona && form.capitulo.trim();
+    return form.departamento && form.municipio && form.capitulo.trim() && form.zona;
   }
   function validarPaso4() {
     if (!form.cargo_fihnec || form.ha_recibido_saeles === null) return false;
@@ -352,6 +392,8 @@ export default function Registro() {
       setCargando(false);
     }
   }
+
+  // --- Estados especiales ---
 
   if (eventos === null && !error) {
     return (
@@ -501,9 +543,9 @@ export default function Registro() {
               <Campo etiqueta="Nombre completo">
                 <input type="text" value={formEdicion.nombre_completo} onChange={(e) => setFormEdicion((f) => ({ ...f, nombre_completo: e.target.value }))} className={claseInput} />
               </Campo>
-              <Campo etiqueta="Fecha de nacimiento">
-                <input type="date" min="1920-01-01" max={hoy} value={formEdicion.fecha_nacimiento} onChange={(e) => setFormEdicion((f) => ({ ...f, fecha_nacimiento: e.target.value }))} className={claseInput} />
-              </Campo>
+              <CampoGrupo etiqueta="Fecha de nacimiento">
+                <SelectorFecha value={formEdicion.fecha_nacimiento} onChange={(v) => setFormEdicion((f) => ({ ...f, fecha_nacimiento: v }))} className={claseInput} />
+              </CampoGrupo>
               <Campo etiqueta="Teléfono móvil (8 dígitos)">
                 <input
                   type="tel" inputMode="numeric" maxLength={8} value={formEdicion.telefono_movil}
@@ -520,7 +562,7 @@ export default function Registro() {
               <Campo etiqueta="Departamento">
                 <select
                   value={formEdicion.departamento}
-                  onChange={(e) => setFormEdicion((f) => ({ ...f, departamento: e.target.value, municipio: '' }))}
+                  onChange={(e) => setFormEdicion((f) => ({ ...f, departamento: e.target.value, municipio: '', zona: '' }))}
                   className={claseInput}
                 >
                   <option value="">Selecciona…</option>
@@ -537,9 +579,9 @@ export default function Registro() {
                 <input type="text" value={formEdicion.capitulo} onChange={(e) => setFormEdicion((f) => ({ ...f, capitulo: e.target.value }))} className={claseInput} placeholder="Nombre de tu capítulo" />
               </Campo>
               <Campo etiqueta="Zona">
-                <select value={formEdicion.zona} onChange={(e) => setFormEdicion((f) => ({ ...f, zona: e.target.value }))} className={claseInput}>
-                  <option value="">Selecciona…</option>
-                  {ZONAS_FIHNEC.map((z) => <option key={z}>{z}</option>)}
+                <select value={formEdicion.zona} onChange={(e) => setFormEdicion((f) => ({ ...f, zona: e.target.value }))} disabled={!formEdicion.departamento} className={`${claseInput} disabled:bg-ink/5`}>
+                  <option value="">{formEdicion.departamento ? 'Selecciona…' : 'Primero elige un departamento'}</option>
+                  {zonasEdicion.map((z) => <option key={z}>{z}</option>)}
                 </select>
               </Campo>
               <Campo etiqueta="Cargo en FIHNEC">
@@ -570,6 +612,8 @@ export default function Registro() {
       </div>
     );
   }
+
+  // --- Wizard normal ---
 
   return (
     <div className="min-h-[70vh] bg-parchment px-5 py-14">
@@ -672,9 +716,9 @@ export default function Registro() {
               <Campo etiqueta="Nombre completo">
                 <input type="text" value={form.nombre_completo} onChange={(e) => actualizar('nombre_completo', e.target.value)} className={claseInput} />
               </Campo>
-              <Campo etiqueta="Fecha de nacimiento">
-                <input type="date" min="1920-01-01" max={hoy} value={form.fecha_nacimiento} onChange={(e) => actualizar('fecha_nacimiento', e.target.value)} className={claseInput} />
-              </Campo>
+              <CampoGrupo etiqueta="Fecha de nacimiento">
+                <SelectorFecha value={form.fecha_nacimiento} onChange={(v) => actualizar('fecha_nacimiento', v)} className={claseInput} />
+              </CampoGrupo>
               <Campo etiqueta="Teléfono móvil (8 dígitos)">
                 <input
                   type="tel" inputMode="numeric" maxLength={8} value={form.telefono_movil}
@@ -702,7 +746,7 @@ export default function Registro() {
               <Campo etiqueta="Departamento">
                 <select
                   value={form.departamento}
-                  onChange={(e) => setForm((f) => ({ ...f, departamento: e.target.value, municipio: '' }))}
+                  onChange={(e) => setForm((f) => ({ ...f, departamento: e.target.value, municipio: '', zona: '' }))}
                   className={claseInput}
                 >
                   <option value="">Selecciona…</option>
@@ -719,9 +763,9 @@ export default function Registro() {
                 <input type="text" value={form.capitulo} onChange={(e) => actualizar('capitulo', e.target.value)} className={claseInput} placeholder="Nombre de tu capítulo" />
               </Campo>
               <Campo etiqueta="Zona">
-                <select value={form.zona} onChange={(e) => actualizar('zona', e.target.value)} className={claseInput}>
-                  <option value="">Selecciona…</option>
-                  {ZONAS_FIHNEC.map((z) => <option key={z}>{z}</option>)}
+                <select value={form.zona} onChange={(e) => actualizar('zona', e.target.value)} disabled={!form.departamento} className={`${claseInput} disabled:bg-ink/5`}>
+                  <option value="">{form.departamento ? 'Selecciona…' : 'Primero elige un departamento'}</option>
+                  {zonasDisponibles.map((z) => <option key={z}>{z}</option>)}
                 </select>
               </Campo>
               <div className="flex justify-between pt-2">
@@ -804,7 +848,7 @@ export default function Registro() {
                 {[
                   [form.es_extranjero ? 'Pasaporte' : 'DNI', form.dni],
                   ['Nombre', form.nombre_completo],
-                  ['Fecha de nacimiento', form.fecha_nacimiento],
+                  ['Fecha de nacimiento', form.fecha_nacimiento ? form.fecha_nacimiento.split('-').reverse().join('/') : '—'],
                   ['Teléfono', form.telefono_movil],
                   ['Estado civil', form.estado_civil],
                   ['Departamento / Municipio', `${form.departamento} / ${form.municipio}`],

@@ -7,6 +7,7 @@ export default function AdminDiplomas() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [descargando, setDescargando] = useState('');
+  const [mayusculas, setMayusculas] = useState(false); // opción para PDF/Imprimir/Excel; por defecto apagada
   const [pagina, setPagina] = useState(1);
   const POR_PAGINA = 10;
 
@@ -68,7 +69,10 @@ export default function AdminDiplomas() {
     setDescargando(tipo);
     setError('');
     try {
-      const { data } = await api.get(`/admin/eventos/${eventoActual.id}/diplomas/${tipo}`, { responseType: 'blob' });
+      const { data } = await api.get(`/admin/eventos/${eventoActual.id}/diplomas/${tipo}`, {
+        responseType: 'blob',
+        params: mayusculas ? { mayusculas: 1 } : undefined,
+      });
       const url = window.URL.createObjectURL(new Blob([data]));
       const a = document.createElement('a');
       a.href = url;
@@ -96,7 +100,10 @@ export default function AdminDiplomas() {
     setDescargando('imprimir');
     setError('');
     try {
-      const { data } = await api.get(`/admin/eventos/${eventoActual.id}/diplomas/pdf`, { responseType: 'blob' });
+      const { data } = await api.get(`/admin/eventos/${eventoActual.id}/diplomas/pdf`, {
+        responseType: 'blob',
+        params: mayusculas ? { mayusculas: 1 } : undefined,
+      });
       const url = window.URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
       if (ventana) {
         ventana.location.href = url;
@@ -121,7 +128,16 @@ export default function AdminDiplomas() {
           </p>
         </div>
         {eventoActual && (
-          <div className="flex shrink-0 gap-2 print:hidden">
+          <div className="flex shrink-0 items-center gap-2 print:hidden">
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink/70">
+              <input
+                type="checkbox"
+                checked={mayusculas}
+                onChange={(e) => setMayusculas(e.target.checked)}
+                className="h-4 w-4 accent-[#007334]"
+              />
+              Todo en mayúsculas
+            </label>
             <button
               onClick={() => descargar('excel')}
               disabled={!!descargando || !datos || datos.total === 0}
@@ -230,30 +246,41 @@ export default function AdminDiplomas() {
                     <th className="px-4 py-3">#</th>
                     <th className="px-4 py-3">Zona</th>
                     <th className="px-4 py-3">Capítulo</th>
+                    <th className="px-4 py-3">Procedencia</th>
                     <th className="px-4 py-3">Nombre</th>
                     <th className="px-4 py-3">1er SAEL</th>
+                    <th className="px-4 py-3">Efectivo</th>
+                    <th className="px-4 py-3">Transferencia Bancaria</th>
+                    <th className="px-4 py-3">Tarjeta crédito/débito</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(!datos || datos.filas.length === 0) && (
-                    <tr><td colSpan={5} className="px-4 py-6 text-center text-ink/40">Todavía no hay participantes con asistencia confirmada en este evento.</td></tr>
+                    <tr><td colSpan={9} className="px-4 py-6 text-center text-ink/40">Todavía no hay participantes con asistencia confirmada en este evento.</td></tr>
                   )}
                   {datos?.filas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA).map((f) => (
                     <tr key={f.numero} className="border-b border-ink/5 text-left last:border-0">
                       <td className="px-4 py-3 text-ink/60">{f.numero}</td>
                       <td className="px-4 py-3 font-medium text-ink">{f.zona}</td>
                       <td className="px-4 py-3 text-ink/60">{f.capitulo || '—'}</td>
+                      <td className="px-4 py-3 text-ink/60">{f.procedencia || '—'}</td>
                       <td className="px-4 py-3 text-ink/60">{f.nombre_completo}</td>
                       <td className="px-4 py-3 text-ink/60">{f.primera_vez ? '1' : ''}</td>
+                      <td className="px-4 py-3 text-ink/60">{f.metodo_pago === 'efectivo' && f.alimentacion_monto ? `L. ${f.alimentacion_monto}` : ''}</td>
+                      <td className="px-4 py-3 text-ink/60">{f.metodo_pago === 'transferencia' && f.alimentacion_monto ? `L. ${f.alimentacion_monto}` : ''}</td>
+                      <td className="px-4 py-3 text-ink/60">{f.metodo_pago === 'tarjeta' && f.alimentacion_monto ? `L. ${f.alimentacion_monto}` : ''}</td>
                     </tr>
                   ))}
                 </tbody>
                 {datos && datos.total > 0 && (
                   <tfoot>
                     <tr className="border-t border-ink/10 text-left font-semibold text-ink">
-                      <td className="px-4 py-3" colSpan={3}></td>
+                      <td className="px-4 py-3" colSpan={4}></td>
                       <td className="px-4 py-3">Total: {datos.total}</td>
                       <td className="px-4 py-3">1ra vez: {datos.total_primera_vez}</td>
+                      <td className="px-4 py-3">L. {datos.totalesPago?.efectivo?.toFixed(2) ?? '0.00'}</td>
+                      <td className="px-4 py-3">L. {datos.totalesPago?.transferencia?.toFixed(2) ?? '0.00'}</td>
+                      <td className="px-4 py-3">L. {datos.totalesPago?.tarjeta?.toFixed(2) ?? '0.00'}</td>
                     </tr>
                   </tfoot>
                 )}

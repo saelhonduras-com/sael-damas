@@ -4,6 +4,7 @@ const pool = require('../db');
 const { requireAuth, requireModulo } = require('../middleware/auth');
 const xlsx = require('xlsx');
 const PDFDocument = require('pdfkit');
+const { pedidoEnMayusculas, aplicarMayusculas, mayusculasEnHoja } = require('../pdfMayusculas');
 
 function validarDni(dni) {
   return /^\d{13}$/.test(dni);
@@ -35,8 +36,9 @@ function validarFechaNacimiento(fecha) {
   if (!fecha) return false;
   const d = new Date(fecha);
   if (Number.isNaN(d.getTime())) return false;
-  const minimo = new Date('1900-01-01');
   const hoy = new Date();
+  // Hasta 100 años hacia atrás (mismo rango que ofrece el selector del formulario).
+  const minimo = new Date(`${hoy.getFullYear() - 100}-01-01`);
   return d >= minimo && d <= hoy;
 }
 
@@ -111,7 +113,7 @@ router.put('/participantes/:id', async (req, res) => {
   if (!numero_identificacion) {
     return res.status(400).json({ error: 'Falta el número de identificación.' });
   }
-  if (!nombre_completo || !fecha_nacimiento || !telefono_movil || !departamento || !municipio || !zona || !cargo_fihnec || !estado_civil) {
+  if (!nombre_completo || !fecha_nacimiento || !telefono_movil || !departamento || !municipio || !capitulo || !String(capitulo).trim() || !zona || !cargo_fihnec || !estado_civil) {
     return res.status(400).json({ error: 'Faltan campos obligatorios.' });
   }
   if (!validarFechaNacimiento(fecha_nacimiento)) {
@@ -182,7 +184,7 @@ router.post('/participantes', async (req, res) => {
   } else if (!validarDni(numero_identificacion)) {
     return res.status(400).json({ error: 'El DNI debe tener 13 dígitos.' });
   }
-  if (!nombre_completo || !fecha_nacimiento || !telefono_movil || !departamento || !municipio || !zona || !cargo_fihnec || !estado_civil) {
+  if (!nombre_completo || !fecha_nacimiento || !telefono_movil || !departamento || !municipio || !capitulo || !String(capitulo).trim() || !zona || !cargo_fihnec || !estado_civil) {
     return res.status(400).json({ error: 'Faltan campos obligatorios.' });
   }
   if (!validarFechaNacimiento(fecha_nacimiento)) {
@@ -420,7 +422,7 @@ router.get('/admin/participantes/estadisticas', requireAuth, requireModulo('part
     const saelistasAsistencia = evento_id
       ? await pool.query(`SELECT COUNT(*) FROM saelista_asistencias WHERE evento_id = $1 AND registrado_presencial = true`, [evento_id])
       : await pool.query(`SELECT COUNT(*) FROM saelista_asistencias WHERE registrado_presencial = true`);
-    const estadisticas = { total: 0, nacional: 0, extranjero: 0 };
+    const estadisticas = { total: 0, nacional: 0, extranjero: 0, menor: 0 };
     confirmados.rows.forEach((r) => {
       const cantidad = parseInt(r.total, 10);
       estadisticas[r.tipo_participante] = cantidad;
@@ -508,11 +510,9 @@ router.put('/admin/participantes/:id/ocultar', requireAuth, requireModulo('parti
   }
 });
 
-// Admin: inscritos de UN evento específico, con su estado de chequeo presencial
-// y su método de pago (para poder filtrar "pendientes de cobro" en el
-// frontend). Es la base de la pestaña "Inscribiéndose ahora" — permite
-// marcar/desmarcar Registrado directo en la tabla, sin entrar al detalle
-// de cada participante.
+// Admin: inscritos de UN evento específico, con su estado de chequeo presencial.
+// Es la base de la pestaña "Inscribiéndose ahora" — permite marcar/desmarcar
+// Registrado directo en la tabla, sin entrar al detalle de cada participante.
 // NOTA: vive aquí por consistencia con el resto de rutas de inscripciones/participantes;
 // si más adelante prefieres que viva en eventos.js, es un mover-y-listo.
 router.get('/admin/eventos/:evento_id/inscripciones', requireAuth, requireModulo('participantes', 'consulta'), async (req, res) => {
@@ -530,7 +530,9 @@ router.get('/admin/eventos/:evento_id/inscripciones', requireAuth, requireModulo
     const { rows } = await pool.query(
       `SELECT i.id AS inscripcion_id, i.registrado_presencial, i.metodo_pago,
               p.id AS participante_id, p.nombre_completo, p.numero_identificacion,
-              p.tipo_identificacion, p.tipo_participante, p.capitulo, p.zona
+              p.tipo_identificacion, p.tipo_participante, p.capitulo, p.zona,
+              p.departamento, p.municipio,
+              to_char(p.fecha_nacimiento, 'YYYY-MM-DD') AS fecha_nacimiento
        FROM inscripciones i
        JOIN participantes p ON p.id = i.participante_id
        WHERE ${condiciones.join(' AND ')}
@@ -783,6 +785,352 @@ router.post('/admin/participantes/extranjero', requireAuth, requireModulo('parti
   }
 });
 
+// Admin: PDF de cumpleañeros del evento — mismo diseño que el PDF de Diplomas
+// (logo, encabezado, línea azul, tabla centrada). Incluye a los inscritos al
+// evento que cumplen años entre su primer y último día, agrupados por día
+// (viernes, sábado, domingo…) y en orden alfabético dentro de cada día.
+router.get('/admin/eventos/:evento_id/cumpleaneros/pdf', requireAuth, requireModulo('participantes', 'consulta'), async (req, res) => {
+  const { evento_id } = req.params;
+  try {
+    const evento = await pool.query(
+      `SELECT nombre, to_char(fecha_inicio, 'YYYY-MM-DD') AS fecha_inicio, to_char(fecha_fin, 'YYYY-MM-DD') AS fecha_fin
+       FROM eventos WHERE id = $1`,
+      [evento_id]
+    );
+    if (evento.rows.length === 0) {
+      return res.status(404).json({ error: 'El evento no existe.' });
+    }
+    const ev = evento.rows[0];
+
+    const { rows: inscritos } = await pool.query(
+      `SELECT p.nombre_completo, p.tipo_participante, p.capitulo, p.zona, p.departamento, p.municipio,
+              to_char(p.fecha_nacimiento, 'YYYY-MM-DD') AS fecha_nacimiento
+       FROM inscripciones i
+       JOIN participantes p ON p.id = i.participante_id
+       WHERE i.evento_id = $1 AND p.oculto = false AND p.fecha_nacimiento IS NOT NULL`,
+      [evento_id]
+    );
+
+    // Días del evento (UTC puro, sin zona horaria, para que no se corra un día).
+    const [a1, m1, d1] = ev.fecha_inicio.split('-').map(Number);
+    const [a2, m2, d2] = ev.fecha_fin.split('-').map(Number);
+    const dias = [];
+    let actual = Date.UTC(a1, m1 - 1, d1);
+    const fin = Date.UTC(a2, m2 - 1, d2);
+    for (let n = 0; actual <= fin && n < 31; n += 1, actual += 86400000) dias.push(new Date(actual));
+
+    const grupos = [];
+    inscritos.forEach((r) => {
+      const [an, mn, dn] = r.fecha_nacimiento.split('-').map(Number);
+      const dia = dias.find((d) => d.getUTCMonth() + 1 === mn && d.getUTCDate() === dn);
+      if (!dia) return;
+      const clave = dia.toISOString().slice(0, 10);
+      let grupo = grupos.find((g) => g.clave === clave);
+      if (!grupo) { grupo = { clave, dia, items: [] }; grupos.push(grupo); }
+      grupo.items.push({ ...r, edad: dia.getUTCFullYear() - an });
+    });
+    grupos.sort((x, y) => x.dia - y.dia);
+    grupos.forEach((g) => g.items.sort((x, y) => x.nombre_completo.localeCompare(y.nombre_completo, 'es')));
+    const total = grupos.reduce((acc, g) => acc + g.items.length, 0);
+
+    function textoDia(d) {
+      const t = d.toLocaleDateString('es-HN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+      return t.charAt(0).toUpperCase() + t.slice(1);
+    }
+    function fechaDMA(iso) {
+      const [a, m, d] = iso.split('-');
+      return `${d}/${m}/${a}`;
+    }
+
+    // Vertical (portrait), igual que Diplomas.
+    const doc = new PDFDocument({ size: 'letter', margin: 0, layout: 'portrait' });
+    if (pedidoEnMayusculas(req)) aplicarMayusculas(doc);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="cumpleaneros_${ev.nombre.replace(/\s+/g, '_')}.pdf"`);
+    doc.pipe(res);
+
+    const margenX = 40;
+    const anchoPagina = doc.page.width;
+    const rutaLogo = require('path').join(__dirname, '..', 'assets', 'logo-fihnec-emblema.png');
+
+    function encabezadoPagina() {
+      const alturaEncabezado = 70;
+      const cajaLogo = 54;
+      const cajaX = margenX;
+      const cajaY = 8;
+      let xTexto;
+      try {
+        const anchoLogo = cajaLogo * (923 / 787);
+        doc.image(rutaLogo, cajaX, cajaY, { height: cajaLogo });
+        xTexto = cajaX + anchoLogo + 12;
+      } catch (e) {
+        xTexto = cajaX;
+      }
+      doc.fillColor('#1F3464').fontSize(16).text('SAEL Damas · FIHNEC', xTexto, 18, { lineBreak: false });
+      doc.fontSize(10).fillColor('#E40521').text(`Cumpleañeros — ${ev.nombre}`, xTexto, 40, { lineBreak: false });
+
+      const anchoTotales = 220;
+      const xTotales = anchoPagina - margenX - anchoTotales;
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#1F3464')
+        .text(`TOTAL CUMPLEAÑEROS: ${total}`, xTotales, 18, { width: anchoTotales, align: 'right', lineBreak: false });
+      doc.fillColor('#E40521')
+        .text(`DEL ${fechaDMA(ev.fecha_inicio)} AL ${fechaDMA(ev.fecha_fin)}`, xTotales, 34, { width: anchoTotales, align: 'right', lineBreak: false });
+      doc.font('Helvetica');
+
+      doc.moveTo(0, alturaEncabezado).lineTo(anchoPagina, alturaEncabezado).lineWidth(3).strokeColor('#1F3464').stroke();
+      doc.lineWidth(1);
+      doc.y = alturaEncabezado + 20;
+    }
+
+    const anchoCol = { num: 22, nombre: 150, edad: 45, capitulo: 85, zona: 70, procedencia: 118 };
+    const anchoTabla = Object.values(anchoCol).reduce((a, b) => a + b, 0);
+    const inicioTabla = (anchoPagina - anchoTabla) / 2;
+    const col = { num: inicioTabla };
+    col.nombre = col.num + anchoCol.num;
+    col.edad = col.nombre + anchoCol.nombre;
+    col.capitulo = col.edad + anchoCol.edad;
+    col.zona = col.capitulo + anchoCol.capitulo;
+    col.procedencia = col.zona + anchoCol.zona;
+
+    function celda(texto, x, y, ancho, alineacion = 'center') {
+      doc.text(texto, x, y, { width: ancho, align: alineacion, ellipsis: true, lineBreak: false });
+    }
+    function celdaEnvuelta(texto, x, y, ancho) {
+      doc.text(texto, x, y, { width: ancho, align: 'left' });
+    }
+
+    function encabezadosTabla() {
+      const y = doc.y;
+      doc.fontSize(8).fillColor('#000000');
+      celda('#', col.num, y, anchoCol.num);
+      celda('NOMBRE', col.nombre, y, anchoCol.nombre, 'left');
+      celda('CUMPLE', col.edad, y, anchoCol.edad);
+      celda('CAPÍTULO', col.capitulo, y, anchoCol.capitulo, 'left');
+      celda('ZONA', col.zona, y, anchoCol.zona, 'left');
+      celda('PROCEDENCIA', col.procedencia, y, anchoCol.procedencia, 'left');
+      doc.y = y + 16;
+      doc.moveTo(inicioTabla, doc.y).lineTo(inicioTabla + anchoTabla, doc.y).strokeColor('#cccccc').stroke();
+      doc.y += 6;
+    }
+
+    function nuevaPagina() {
+      doc.addPage({ size: 'letter', margin: 0, layout: 'portrait' });
+      encabezadoPagina();
+      encabezadosTabla();
+    }
+
+    encabezadoPagina();
+    encabezadosTabla();
+
+    if (total === 0) {
+      doc.fontSize(9).fillColor('#666666')
+        .text('Nadie de los inscritos cumple años durante este evento.', inicioTabla, doc.y + 10, { width: anchoTabla, align: 'center' });
+    }
+
+    let numero = 0;
+    grupos.forEach((g) => {
+      // Banda con el día — así se lee "Viernes 27 de noviembre", "Sábado…", etc.
+      if (doc.y + 40 > doc.page.height - 40) nuevaPagina();
+      const yDia = doc.y;
+      doc.rect(inicioTabla, yDia - 2, anchoTabla, 14).fill('#FDF2C4');
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#1F3464');
+      doc.text(`${textoDia(g.dia)} · ${g.items.length}`, inicioTabla + 4, yDia + 1, { width: anchoTabla - 8, lineBreak: false });
+      doc.font('Helvetica');
+      doc.y = yDia + 18;
+
+      g.items.forEach((r) => {
+        numero += 1;
+        const procedencia = r.departamento ? `${r.departamento}${r.municipio ? ', ' + r.municipio : ''}` : '';
+        const nombre = r.tipo_participante === 'menor' ? `${r.nombre_completo} (menor)` : r.nombre_completo;
+        doc.fontSize(7).fillColor('#000000');
+        const alturaDatos = Math.max(
+          doc.heightOfString(nombre, { width: anchoCol.nombre }),
+          doc.heightOfString(r.capitulo || '', { width: anchoCol.capitulo }),
+          doc.heightOfString(r.zona || '', { width: anchoCol.zona }),
+          doc.heightOfString(procedencia, { width: anchoCol.procedencia }),
+          10
+        );
+        const altoFila = alturaDatos + 6;
+        if (doc.y + altoFila > doc.page.height - 40) {
+          nuevaPagina();
+          doc.fontSize(7).fillColor('#000000');
+        }
+        const y = doc.y;
+        celda(String(numero), col.num, y, anchoCol.num);
+        celdaEnvuelta(nombre, col.nombre, y, anchoCol.nombre);
+        celda(`${r.edad} años`, col.edad, y, anchoCol.edad);
+        celdaEnvuelta(r.capitulo || '', col.capitulo, y, anchoCol.capitulo);
+        celdaEnvuelta(r.zona || '', col.zona, y, anchoCol.zona);
+        celdaEnvuelta(procedencia, col.procedencia, y, anchoCol.procedencia);
+        doc.y = y + altoFila;
+      });
+    });
+
+    doc.end();
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'No se pudo generar el PDF.' });
+    }
+  }
+});
+
+// Admin: agrega un MENOR de edad manualmente y lo inscribe de una vez al evento
+// indicado. Los menores normalmente no tienen DNI, así que el sistema les asigna
+// un código interno propio (MEN-00001…); el código lleva guion a propósito para
+// que NO pase la validación de DNI ni de pasaporte. Si el menor SÍ trae un número
+// de identidad de 13 dígitos (campo opcional), se guarda ese como su DNI y podrá
+// inscribirse también desde el formulario público. El responsable se guarda como contacto
+// de emergencia (obligatorio). Si ya existe alguien con el mismo nombre y fecha
+// de nacimiento, no se crea otro: se avisa para inscribir al existente y así
+// no duplicar registros en cada evento.
+router.post('/admin/participantes/menor', requireAuth, requireModulo('participantes', 'edicion'), async (req, res) => {
+  const {
+    numero_identificacion, nombre_completo, fecha_nacimiento,
+    departamento, municipio, capitulo, zona,
+    contacto_emergencia_nombre, contacto_emergencia_telefono,
+    evento_id,
+  } = req.body;
+
+  if (!nombre_completo || !nombre_completo.trim()) {
+    return res.status(400).json({ error: 'El nombre completo es obligatorio.' });
+  }
+  if (!fecha_nacimiento || !validarFechaNacimiento(fecha_nacimiento)) {
+    return res.status(400).json({ error: 'La fecha de nacimiento es obligatoria y debe ser válida.' });
+  }
+  if (!contacto_emergencia_nombre || !contacto_emergencia_nombre.trim()) {
+    return res.status(400).json({ error: 'El nombre del responsable es obligatorio.' });
+  }
+  if (!contacto_emergencia_telefono || !validarTelefono(contacto_emergencia_telefono)) {
+    return res.status(400).json({ error: 'El teléfono del responsable debe tener exactamente 8 dígitos.' });
+  }
+  if (!evento_id) {
+    return res.status(400).json({ error: 'Debes seleccionar el evento SAEL al que se inscribe.' });
+  }
+  const dni = (numero_identificacion || '').trim();
+  if (dni && !validarDni(dni)) {
+    return res.status(400).json({ error: 'El DNI debe tener 13 dígitos (o déjalo vacío para asignar un código interno).' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const evento = await client.query(`SELECT abierto FROM eventos WHERE id = $1`, [evento_id]);
+    if (evento.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'El evento no existe.' });
+    }
+    if (!evento.rows[0].abierto) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'El registro para este evento está cerrado.' });
+    }
+
+    if (dni) {
+      const yaExiste = await client.query(
+        `SELECT id, nombre_completo, numero_identificacion FROM participantes WHERE numero_identificacion = $1`,
+        [dni]
+      );
+      if (yaExiste.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          duplicado: true,
+          participante: yaExiste.rows[0],
+          error: `Ese DNI ya está registrado a nombre de ${yaExiste.rows[0].nombre_completo}. No se creó otro registro.`,
+        });
+      }
+    }
+
+    const nombreLimpio = nombre_completo.trim().replace(/\s+/g, ' ');
+    const duplicado = await client.query(
+      `SELECT id, nombre_completo, numero_identificacion
+       FROM participantes
+       WHERE oculto = false
+         AND fecha_nacimiento = $2
+         AND lower(regexp_replace(trim(nombre_completo), '\\s+', ' ', 'g')) = lower($1)
+       LIMIT 1`,
+      [nombreLimpio, fecha_nacimiento]
+    );
+    if (duplicado.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        duplicado: true,
+        participante: duplicado.rows[0],
+        error: `Ya existe un participante con ese nombre y fecha de nacimiento (${duplicado.rows[0].numero_identificacion}). No se creó otro registro.`,
+      });
+    }
+
+    let identificacion = dni;
+    if (!dni) {
+      const { rows: seq } = await client.query(`SELECT nextval('menores_codigo_seq') AS n`);
+      identificacion = `MEN-${String(seq[0].n).padStart(5, '0')}`;
+    }
+
+    const participante = await client.query(
+      `INSERT INTO participantes (
+        numero_identificacion, tipo_identificacion, tipo_participante,
+        nombre_completo, fecha_nacimiento,
+        departamento, municipio, capitulo, zona,
+        contacto_emergencia_nombre, contacto_emergencia_telefono
+      ) VALUES ($1,$10,'menor',$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING id, nombre_completo, numero_identificacion`,
+      [
+        identificacion, nombreLimpio, fecha_nacimiento,
+        departamento || null, municipio || null, capitulo || null, zona || null,
+        contacto_emergencia_nombre.trim(), contacto_emergencia_telefono,
+        dni ? 'DNI' : 'Código interno',
+      ]
+    );
+
+    await client.query(
+      `INSERT INTO inscripciones (participante_id, evento_id) VALUES ($1, $2)`,
+      [participante.rows[0].id, evento_id]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json(participante.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Ese DNI ya está registrado.' });
+    }
+    res.status(500).json({ error: 'No se pudo completar el registro del menor.' });
+  } finally {
+    client.release();
+  }
+});
+
+// Admin: inscribe a un participante YA existente (de cualquier tipo) a un
+// evento abierto, sin que tenga que pasar por el formulario público. Es lo que
+// permite que un menor (sin DNI) se registre una sola vez y en los siguientes
+// eventos solo se le busque y se le inscriba.
+router.post('/admin/participantes/:id/inscribir', requireAuth, requireModulo('participantes', 'edicion'), async (req, res) => {
+  const { id } = req.params;
+  const { evento_id } = req.body;
+  if (!evento_id) {
+    return res.status(400).json({ error: 'Falta el evento.' });
+  }
+  try {
+    const evento = await pool.query(`SELECT abierto FROM eventos WHERE id = $1`, [evento_id]);
+    if (evento.rows.length === 0) {
+      return res.status(404).json({ error: 'El evento no existe.' });
+    }
+    if (!evento.rows[0].abierto) {
+      return res.status(400).json({ error: 'El registro para este evento está cerrado.' });
+    }
+    const participante = await pool.query(`SELECT id FROM participantes WHERE id = $1 AND oculto = false`, [id]);
+    if (participante.rows.length === 0) {
+      return res.status(404).json({ error: 'Participante no encontrado.' });
+    }
+    await pool.query(`INSERT INTO inscripciones (participante_id, evento_id) VALUES ($1, $2)`, [id, evento_id]);
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Este participante ya está inscrito a ese evento.' });
+    }
+    res.status(500).json({ error: 'No se pudo inscribir al participante.' });
+  }
+});
+
 // Admin: marca (o desmarca) el chequeo presencial de una inscripción específica.
 // Igual que en SFL: nunca se borra la inscripción por inasistencia, solo queda
 // con registrado_presencial = false para siempre y así se excluye de conteos.
@@ -864,14 +1212,10 @@ router.put('/admin/inscripciones/:id/presencial', requireAuth, requireModulo('pa
 // actualiza después). Se calcula igual que "Total de SAELES": histórico
 // previo + confirmaciones reales dentro del sistema. Es "primera vez"
 // solo cuando ese total da exactamente 1.
-//
-// SAEL DAMAS: este sistema no tiene módulo de cobro (no hay Catálogo de
-// Cuentas), así que el reporte de Diplomas es una lista plana, sin
-// columnas de dinero. Se ordena por Zona y luego por Capítulo (además
-// del nombre, como desempate), a pedido de Carlos.
 async function obtenerFilasDiplomas(evento_id) {
   const { rows } = await pool.query(
-    `SELECT p.zona, p.capitulo, p.nombre_completo, p.veces_saeles_previas,
+    `SELECT p.zona, p.capitulo, p.departamento, p.municipio, p.nombre_completo, p.veces_saeles_previas,
+            i.alimentacion_monto, i.metodo_pago, i.observaciones_pago,
             (SELECT COUNT(*) FROM inscripciones i2
                WHERE i2.participante_id = p.id AND i2.registrado_presencial = true) AS confirmadas
      FROM inscripciones i
@@ -880,14 +1224,24 @@ async function obtenerFilasDiplomas(evento_id) {
      ORDER BY p.zona ASC, p.capitulo ASC, p.nombre_completo ASC`,
     [evento_id]
   );
-
   const conPrimeraVez = rows.map((r) => ({
     ...r,
+    procedencia: r.departamento ? `${r.departamento}${r.municipio ? ', ' + r.municipio : ''}` : '',
     total_saeles: (r.veces_saeles_previas || 0) + parseInt(r.confirmadas, 10),
   }));
   const total_primera_vez = conPrimeraVez.filter((r) => r.total_saeles === 1).length;
 
-  return { rows: conPrimeraVez, total: conPrimeraVez.length, total_primera_vez };
+  // Totales por método de pago — suma de alimentacion_monto agrupado por
+  // metodo_pago, para las 3 columnas nuevas (Efectivo / Transferencia
+  // Bancaria / Tarjeta) que se muestran en pantalla, Excel y PDF.
+  const totalesPago = { efectivo: 0, transferencia: 0, tarjeta: 0 };
+  conPrimeraVez.forEach((r) => {
+    if (r.metodo_pago && totalesPago[r.metodo_pago] !== undefined && r.alimentacion_monto) {
+      totalesPago[r.metodo_pago] += Number(r.alimentacion_monto);
+    }
+  });
+
+  return { rows: conPrimeraVez, total: conPrimeraVez.length, total_primera_vez, totalesPago };
 }
 
 // Admin: lista para mostrar en pantalla (tabla + totales)
@@ -898,18 +1252,22 @@ router.get('/admin/eventos/:evento_id/diplomas', requireAuth, requireModulo('dip
     if (evento.rows.length === 0) {
       return res.status(404).json({ error: 'El evento no existe.' });
     }
-    const { rows, total, total_primera_vez } = await obtenerFilasDiplomas(evento_id);
+    const { rows, total, total_primera_vez, totalesPago } = await obtenerFilasDiplomas(evento_id);
     res.json({
       evento_nombre: evento.rows[0].nombre,
       filas: rows.map((r, i) => ({
         numero: i + 1,
         zona: r.zona,
         capitulo: r.capitulo || '',
+        procedencia: r.procedencia,
         nombre_completo: r.nombre_completo,
         primera_vez: r.total_saeles === 1,
+        metodo_pago: r.metodo_pago,
+        alimentacion_monto: r.alimentacion_monto,
       })),
       total,
       total_primera_vez,
+      totalesPago,
     });
   } catch (err) {
     res.status(500).json({ error: 'No se pudo obtener la lista de diplomas.' });
@@ -924,21 +1282,29 @@ router.get('/admin/eventos/:evento_id/diplomas/excel', requireAuth, requireModul
     if (evento.rows.length === 0) {
       return res.status(404).json({ error: 'El evento no existe.' });
     }
-    const { rows, total, total_primera_vez } = await obtenerFilasDiplomas(evento_id);
+    const { rows, total, total_primera_vez, totalesPago } = await obtenerFilasDiplomas(evento_id);
 
     const datos = rows.map((r, i) => ({
       '#': i + 1,
       ZONA: r.zona,
       CAPÍTULO: r.capitulo || '',
+      PROCEDENCIA: r.procedencia,
       NOMBRE: r.nombre_completo,
       '1ER SAEL': r.total_saeles === 1 ? '1' : '',
+      Efectivo: r.metodo_pago === 'efectivo' && r.alimentacion_monto ? Number(r.alimentacion_monto) : '',
+      'Transferencia Bancaria': r.metodo_pago === 'transferencia' && r.alimentacion_monto ? Number(r.alimentacion_monto) : '',
+      'Tarjeta credito/debito': r.metodo_pago === 'tarjeta' && r.alimentacion_monto ? Number(r.alimentacion_monto) : '',
     }));
     datos.push({});
     datos.push({ CAPÍTULO: 'Resumen' });
     datos.push({ CAPÍTULO: 'Total confirmados', NOMBRE: total });
     datos.push({ CAPÍTULO: 'Total primera vez', NOMBRE: total_primera_vez });
+    datos.push({ CAPÍTULO: 'Total Efectivo', NOMBRE: totalesPago.efectivo });
+    datos.push({ CAPÍTULO: 'Total Transferencia Bancaria', NOMBRE: totalesPago.transferencia });
+    datos.push({ CAPÍTULO: 'Total TC / TD', NOMBRE: totalesPago.tarjeta });
 
     const hoja = xlsx.utils.json_to_sheet(datos);
+    if (pedidoEnMayusculas(req)) mayusculasEnHoja(hoja);
     const libro = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(libro, hoja, 'Diplomas');
     const buffer = xlsx.write(libro, { type: 'buffer', bookType: 'xlsx' });
@@ -959,10 +1325,11 @@ router.get('/admin/eventos/:evento_id/diplomas/pdf', requireAuth, requireModulo(
     if (evento.rows.length === 0) {
       return res.status(404).json({ error: 'El evento no existe.' });
     }
-    const { rows, total, total_primera_vez } = await obtenerFilasDiplomas(evento_id);
+    const { rows, total, total_primera_vez, totalesPago } = await obtenerFilasDiplomas(evento_id);
 
     // Vertical (portrait), a pedido de Carlos.
     const doc = new PDFDocument({ size: 'letter', margin: 0, layout: 'portrait' });
+    if (pedidoEnMayusculas(req)) aplicarMayusculas(doc);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="diplomas_${evento.rows[0].nombre.replace(/\s+/g, '_')}.pdf"`);
     doc.pipe(res);
@@ -1006,17 +1373,21 @@ router.get('/admin/eventos/:evento_id/diplomas/pdf', requireAuth, requireModulo(
     }
 
     // Tabla centrada horizontalmente en la página, columnas también
-    // centradas (encabezados y datos por igual). SAEL Damas no tiene
-    // módulo de cobro, así que la tabla es solo datos de la persona —
-    // sin columnas de dinero.
-    const anchoCol = { num: 20, zona: 120, capitulo: 110, nombre: 220, primera: 50 };
+    // centradas (encabezados y datos por igual). Se achicaron un poco
+    // zona/capítulo/nombre para que quepa también la columna nueva de
+    // Procedencia, sin salirse de la hoja vertical.
+    const anchoCol = { num: 20, zona: 72, capitulo: 55, procedencia: 64, nombre: 84, primera: 38, efectivo: 60, transferencia: 65, tarjeta: 58 };
     const anchoTabla = Object.values(anchoCol).reduce((a, b) => a + b, 0);
     const inicioTabla = (anchoPagina - anchoTabla) / 2;
     const col = { num: inicioTabla };
     col.zona = col.num + anchoCol.num;
     col.capitulo = col.zona + anchoCol.zona;
-    col.nombre = col.capitulo + anchoCol.capitulo;
+    col.procedencia = col.capitulo + anchoCol.capitulo;
+    col.nombre = col.procedencia + anchoCol.procedencia;
     col.primera = col.nombre + anchoCol.nombre;
+    col.efectivo = col.primera + anchoCol.primera;
+    col.transferencia = col.efectivo + anchoCol.efectivo;
+    col.tarjeta = col.transferencia + anchoCol.transferencia;
 
     function celda(texto, x, y, ancho, alineacion = 'center') {
       doc.text(texto, x, y, { width: ancho, align: alineacion, ellipsis: true, lineBreak: false });
@@ -1035,8 +1406,12 @@ router.get('/admin/eventos/:evento_id/diplomas/pdf', requireAuth, requireModulo(
       celda('#', col.num, y, anchoCol.num);
       celda('ZONA', col.zona, y, anchoCol.zona, 'left');
       celda('CAPÍTULO', col.capitulo, y, anchoCol.capitulo, 'left');
+      celda('PROCEDENCIA', col.procedencia, y, anchoCol.procedencia, 'left');
       celda('NOMBRE', col.nombre, y, anchoCol.nombre, 'left');
       celda('1ER SAEL', col.primera, y, anchoCol.primera);
+      celda('EFECTIVO', col.efectivo, y, anchoCol.efectivo);
+      celda('TRANSF.', col.transferencia, y, anchoCol.transferencia);
+      celda('TARJETA', col.tarjeta, y, anchoCol.tarjeta);
       doc.y = y + 16;
       doc.moveTo(inicioTabla, doc.y).lineTo(inicioTabla + anchoTabla, doc.y).strokeColor('#cccccc').stroke();
       doc.y += 6;
@@ -1052,9 +1427,18 @@ router.get('/admin/eventos/:evento_id/diplomas/pdf', requireAuth, requireModulo(
       // decidir la altura de la fila, o se encima con la siguiente.
       const alturaZona = doc.heightOfString(r.zona || '', { width: anchoCol.zona });
       const alturaCapitulo = doc.heightOfString(r.capitulo || '', { width: anchoCol.capitulo });
+      const alturaProcedencia = doc.heightOfString(r.procedencia || '', { width: anchoCol.procedencia });
       const alturaNombre = doc.heightOfString(r.nombre_completo, { width: anchoCol.nombre });
-      const alturaDatos = Math.max(alturaZona, alturaCapitulo, alturaNombre, 10);
-      const altoFila = alturaDatos + 6;
+      const alturaDatos = Math.max(alturaZona, alturaCapitulo, alturaProcedencia, alturaNombre, 10);
+
+      // Observación de pago (ej. motivo de una cortesía) — se agrega como
+      // una notita debajo del nombre solo cuando esa persona tiene algo
+      // escrito. Se mide su altura real para que tampoco se encime.
+      const anchoObs = anchoCol.nombre + anchoCol.primera + anchoCol.efectivo;
+      const alturaObs = r.observaciones_pago
+        ? doc.heightOfString(`Obs: ${r.observaciones_pago}`, { width: anchoObs })
+        : 0;
+      const altoFila = alturaDatos + 6 + (alturaObs ? alturaObs + 2 : 0);
 
       if (doc.y + altoFila > doc.page.height - 40) {
         doc.addPage({ size: 'letter', margin: 0, layout: 'portrait' });
@@ -1066,8 +1450,18 @@ router.get('/admin/eventos/:evento_id/diplomas/pdf', requireAuth, requireModulo(
       celda(String(i + 1), col.num, y, anchoCol.num);
       celdaEnvuelta(r.zona || '', col.zona, y, anchoCol.zona);
       celdaEnvuelta(r.capitulo || '', col.capitulo, y, anchoCol.capitulo);
+      celdaEnvuelta(r.procedencia || '', col.procedencia, y, anchoCol.procedencia);
       celdaEnvuelta(r.nombre_completo, col.nombre, y, anchoCol.nombre);
       celda(r.total_saeles === 1 ? '1' : '', col.primera, y, anchoCol.primera);
+      celda(r.metodo_pago === 'efectivo' && r.alimentacion_monto ? `L.${r.alimentacion_monto}` : '', col.efectivo, y, anchoCol.efectivo);
+      celda(r.metodo_pago === 'transferencia' && r.alimentacion_monto ? `L.${r.alimentacion_monto}` : '', col.transferencia, y, anchoCol.transferencia);
+      celda(r.metodo_pago === 'tarjeta' && r.alimentacion_monto ? `L.${r.alimentacion_monto}` : '', col.tarjeta, y, anchoCol.tarjeta);
+
+      if (r.observaciones_pago) {
+        doc.font('Helvetica-Oblique').fontSize(6).fillColor('#666666');
+        doc.text(`Obs: ${r.observaciones_pago}`, col.nombre, y + alturaDatos + 2, { width: anchoObs });
+        doc.font('Helvetica').fontSize(7).fillColor('#000000');
+      }
 
       doc.y = y + altoFila;
     });
@@ -1083,8 +1477,11 @@ router.get('/admin/eventos/:evento_id/diplomas/pdf', requireAuth, requireModulo(
     doc.y += 8;
     const yTotalesDiplomas = doc.y;
     doc.font('Helvetica-Bold').fontSize(8).fillColor('#1F3464');
-    celda('TOTALES', col.capitulo, yTotalesDiplomas, anchoCol.capitulo + anchoCol.nombre, 'left');
+    celda('TOTALES', col.capitulo, yTotalesDiplomas, anchoCol.capitulo + anchoCol.procedencia + anchoCol.nombre, 'left');
     celda(String(total_primera_vez), col.primera, yTotalesDiplomas, anchoCol.primera);
+    celda(`L.${totalesPago.efectivo.toFixed(2)}`, col.efectivo, yTotalesDiplomas, anchoCol.efectivo);
+    celda(`L.${totalesPago.transferencia.toFixed(2)}`, col.transferencia, yTotalesDiplomas, anchoCol.transferencia);
+    celda(`L.${totalesPago.tarjeta.toFixed(2)}`, col.tarjeta, yTotalesDiplomas, anchoCol.tarjeta);
     doc.font('Helvetica');
 
     doc.end();
