@@ -596,11 +596,11 @@ export default function Registro() {
                   {CARGOS_FIHNEC.map((c) => <option key={c}>{c}</option>)}
                 </select>
               </Campo>
-              <div className="grid gap-4 sm:grid-cols-[2fr_1fr] [&>*]:min-w-0">
+              <div className="grid gap-4 sm:grid-cols-[3fr_2fr] [&>*]:min-w-0">
               <Campo etiqueta="Contacto de emergencia — nombre">
                 <input type="text" value={formEdicion.contacto_emergencia_nombre} onChange={(e) => setFormEdicion((f) => ({ ...f, contacto_emergencia_nombre: e.target.value }))} className={claseInput} />
               </Campo>
-              <Campo etiqueta="Contacto de emergencia — teléfono (8 dígitos)">
+              <Campo etiqueta="Teléfono (8 dígitos)">
                 <input
                   type="tel" inputMode="numeric" maxLength={8} value={formEdicion.contacto_emergencia_telefono}
                   onChange={(e) => setFormEdicion((f) => ({ ...f, contacto_emergencia_telefono: e.target.value.replace(/\D/g, '') }))}
@@ -816,14 +816,16 @@ export default function Registro() {
               </CampoGrupo>
               {form.ha_recibido_saeles === true && (
                 <Campo etiqueta="¿Cuántos, sin contar el de hoy?">
-                  <input
-                    type="number" min="0" max="99" value={form.veces_saeles_previas}
-                    onChange={(e) => {
-                      const val = e.target.value.slice(0, 2);
-                      actualizar('veces_saeles_previas', val === '' ? '' : String(Math.min(Number(val), 99)));
-                    }}
-                    className={claseInput}
-                  />
+                  <div className="w-28">
+                    <input
+                      type="number" min="0" max="99" value={form.veces_saeles_previas}
+                      onChange={(e) => {
+                        const val = e.target.value.slice(0, 2);
+                        actualizar('veces_saeles_previas', val === '' ? '' : String(Math.min(Number(val), 99)));
+                      }}
+                      className={claseInput}
+                    />
+                  </div>
                   <p className="mt-1 text-xs text-ink/40">Máximo 99</p>
                 </Campo>
               )}
@@ -837,11 +839,11 @@ export default function Registro() {
           {paso === 5 && (
             <div className="space-y-4">
               <h2 className="font-display text-xl font-bold text-ink">Contacto de emergencia</h2>
-              <div className="grid gap-4 sm:grid-cols-[2fr_1fr] [&>*]:min-w-0">
+              <div className="grid gap-4 sm:grid-cols-[3fr_2fr] [&>*]:min-w-0">
               <Campo etiqueta="Nombre completo">
                 <input type="text" value={form.contacto_emergencia_nombre} onChange={(e) => actualizar('contacto_emergencia_nombre', e.target.value)} className={claseInput} />
               </Campo>
-              <Campo etiqueta="Número de teléfono (8 dígitos)">
+              <Campo etiqueta="Teléfono (8 dígitos)">
                 <input
                   type="tel" inputMode="numeric" maxLength={8} value={form.contacto_emergencia_telefono}
                   onChange={(e) => actualizar('contacto_emergencia_telefono', e.target.value.replace(/\D/g, ''))}
