@@ -363,17 +363,6 @@ export default function Home() {
 
             <div className="mx-auto mt-4 max-w-md space-y-3 text-left">
               <div className="flex items-start gap-2 text-sm text-ink/70">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-ember">
-                  <rect x="3" y="5" width="18" height="16" rx="2" />
-                  <path d="M3 10h18M8 3v4M16 3v4" />
-                </svg>
-                <div className="grid grid-cols-[max-content_1fr] gap-x-1">
-                  <span className="font-semibold text-ink">Fechas de reserva:</span>
-                  <span>Únicamente el primer lunes de cada mes (posterior al SAEL recién finalizado).</span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 text-sm text-ink/70">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-gold-light">
                   <circle cx="12" cy="12" r="9" />
                   <path d="m9 12 2 2 4-4" />

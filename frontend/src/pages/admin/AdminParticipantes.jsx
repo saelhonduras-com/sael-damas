@@ -4,7 +4,7 @@ import api, { mensajeError } from '../../api';
 import {
   DEPARTAMENTOS_HONDURAS,
   MUNICIPIOS_POR_DEPARTAMENTO,
-  ZONAS_FIHNEC,
+  ZONAS_FIHNEC, nombreZona,
   ZONAS_POR_DEPARTAMENTO,
   CARGOS_FIHNEC,
   ESTADOS_CIVILES,
@@ -993,7 +993,7 @@ export default function AdminParticipantes() {
                     </select>
                     <select value={filtros.zona} onChange={(e) => setFiltros((f) => ({ ...f, zona: e.target.value }))} className={claseFiltro}>
                       <option value="">Todas las zonas</option>
-                      {ZONAS_FIHNEC.map((z) => <option key={z} value={z}>{z}</option>)}
+                      {ZONAS_FIHNEC.map((z) => <option key={z} value={z}>{nombreZona(z)}</option>)}
                     </select>
                     <select value={filtros.tipo_participante} onChange={(e) => setFiltros((f) => ({ ...f, tipo_participante: e.target.value }))} className={claseFiltro}>
                       {TIPOS_PARTICIPANTE.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -1168,7 +1168,7 @@ export default function AdminParticipantes() {
               <span className="mb-1 block text-xs font-semibold text-ink/60">Zona</span>
               <select value={formEditar.zona} onChange={(e) => setFormEditar((f) => ({ ...f, zona: e.target.value }))} disabled={!formEditar.departamento} className={`${claseInput} disabled:bg-ink/5`}>
                 <option value="">{formEditar.departamento ? 'Seleccionar…' : 'Primero elige un departamento'}</option>
-                {zonasDeDepartamento(formEditar.departamento, formEditar.zona).map((z) => <option key={z} value={z}>{z}</option>)}
+                {zonasDeDepartamento(formEditar.departamento, formEditar.zona).map((z) => <option key={z} value={z}>{nombreZona(z)}</option>)}
               </select>
             </label>
             <label>
@@ -1275,7 +1275,7 @@ export default function AdminParticipantes() {
               <span className="mb-1 block text-xs font-semibold text-ink/60">Zona</span>
               <select value={formExtranjero.zona} onChange={(e) => setFormExtranjero((f) => ({ ...f, zona: e.target.value }))} disabled={!formExtranjero.departamento} className={`${claseInput} disabled:bg-ink/5`}>
                 <option value="">{formExtranjero.departamento ? 'Seleccionar…' : 'Primero elige un departamento'}</option>
-                {zonasDeDepartamento(formExtranjero.departamento, formExtranjero.zona).map((z) => <option key={z} value={z}>{z}</option>)}
+                {zonasDeDepartamento(formExtranjero.departamento, formExtranjero.zona).map((z) => <option key={z} value={z}>{nombreZona(z)}</option>)}
               </select>
             </label>
             <label>
@@ -1393,7 +1393,7 @@ export default function AdminParticipantes() {
               <span className="mb-1 block text-xs font-semibold text-ink/60">Zona</span>
               <select value={formMenor.zona} onChange={(e) => setFormMenor((f) => ({ ...f, zona: e.target.value }))} disabled={!formMenor.departamento} className={`${claseInput} disabled:bg-ink/5`}>
                 <option value="">{formMenor.departamento ? 'Seleccionar…' : 'Primero elige un departamento'}</option>
-                {zonasDeDepartamento(formMenor.departamento, formMenor.zona).map((z) => <option key={z} value={z}>{z}</option>)}
+                {zonasDeDepartamento(formMenor.departamento, formMenor.zona).map((z) => <option key={z} value={z}>{nombreZona(z)}</option>)}
               </select>
             </label>
           </div>

@@ -40,6 +40,9 @@ export const MUNICIPIOS_POR_DEPARTAMENTO = {
   "Yoro": ["Arenal", "El Negrito", "El Progreso", "Jocon", "Morazan", "Olanchito", "Santa Rita", "Sulaco", "Victoria", "Yorito", "Yoro"]
 };
 
+// Quita la palabra "Zona" solo al MOSTRAR (el valor guardado no cambia).
+export const nombreZona = (z) => String(z || '').replace(/^Zona\s+/i, '');
+
 // Zonas propias de SAEL Damas (estructura distinta a la de Jóvenes/Hombres).
 export const ZONAS_FIHNEC = [
   "Zona Centro 1",
