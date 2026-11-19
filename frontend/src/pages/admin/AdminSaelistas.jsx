@@ -551,7 +551,7 @@ export default function AdminSaelistas() {
                     <th className="px-4 py-3">Zona</th>
                     <th className="px-4 py-3">Cargo actual</th>
                     <th className="px-4 py-3">Aspirante</th>
-                    <th className="px-4 py-3"></th>
+                    <th className="px-4 py-3 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
