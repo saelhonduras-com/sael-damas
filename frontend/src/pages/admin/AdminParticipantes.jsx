@@ -816,7 +816,7 @@ export default function AdminParticipantes() {
                                 </td>
                                 <td className="px-4 py-3 text-ink/60">{textoIdentificacion(i.tipo_identificacion, i.numero_identificacion)}</td>
                                 <td className="px-4 py-3 text-ink/60">{i.capitulo || '—'}</td>
-                                <td className="px-4 py-3 text-ink/60">{i.zona}</td>
+                                <td className="px-4 py-3 text-ink/60">{nombreZona(i.zona)}</td>
                                 <td className="px-4 py-3 text-ink/60">{i.departamento ? `${i.departamento}${i.municipio ? ', ' + i.municipio : ''}` : '—'}</td>
                                 <td className="px-4 py-3 text-center">
                                   <input
@@ -960,7 +960,7 @@ export default function AdminParticipantes() {
                                     </td>
                                     <td className="px-4 py-3 text-ink/60">{c.edad} años</td>
                                     <td className="px-4 py-3 text-ink/60">{c.capitulo || '—'}</td>
-                                    <td className="px-4 py-3 text-ink/60">{c.zona || '—'}</td>
+                                    <td className="px-4 py-3 text-ink/60">{c.zona ? nombreZona(c.zona) : '—'}</td>
                                     <td className="px-4 py-3 text-ink/60">{procedenciaDe(c)}</td>
                                     <td className="px-4 py-3 text-center">{llegoDe(c) ? <span className="font-semibold text-[#007334]">Ya llegó ✓</span> : <span className="text-ink/30">—</span>}</td>
                                   </tr>
@@ -1039,7 +1039,7 @@ export default function AdminParticipantes() {
                             <td className="px-4 py-3 text-ink/60">{textoIdentificacion(p.tipo_identificacion, p.numero_identificacion)}</td>
                             <td className="px-4 py-3 text-ink/60 capitalize">{p.tipo_participante}</td>
                             <td className="px-4 py-3 text-ink/60">{p.capitulo || '—'}</td>
-                            <td className="px-4 py-3 text-ink/60">{p.zona}</td>
+                            <td className="px-4 py-3 text-ink/60">{nombreZona(p.zona)}</td>
                             <td className="px-4 py-3 text-ink/60">{p.departamento ? `${p.departamento}${p.municipio ? ', ' + p.municipio : ''}` : '—'}</td>
                             <td className="px-4 py-3 text-right whitespace-nowrap">
                               <button onClick={() => abrirDetalle(p.id)} className={btnVer}>Ver detalle</button>
@@ -1093,7 +1093,7 @@ export default function AdminParticipantes() {
             <div><dt className="text-ink/50">Teléfono</dt><dd className="font-medium text-ink">{seleccionado.telefono_movil || '—'}</dd></div>
             <div><dt className="text-ink/50">Departamento / Municipio</dt><dd className="font-medium text-ink">{seleccionado.departamento || '—'} / {seleccionado.municipio || '—'}</dd></div>
             <div><dt className="text-ink/50">Capítulo</dt><dd className="font-medium text-ink">{seleccionado.capitulo || '—'}</dd></div>
-            <div><dt className="text-ink/50">Zona</dt><dd className="font-medium text-ink">{seleccionado.zona || '—'}</dd></div>
+            <div><dt className="text-ink/50">Zona</dt><dd className="font-medium text-ink">{seleccionado.zona ? nombreZona(seleccionado.zona) : '—'}</dd></div>
             <div><dt className="text-ink/50">Cargo FIHNEC</dt><dd className="font-medium text-ink">{seleccionado.cargo_fihnec || '—'}</dd></div>
             <div><dt className="text-ink/50">Estado civil</dt><dd className="font-medium text-ink">{seleccionado.estado_civil || '—'}</dd></div>
             <div><dt className="text-ink/50">Contacto de emergencia</dt><dd className="font-medium text-ink">{seleccionado.contacto_emergencia_nombre || '—'} {seleccionado.contacto_emergencia_telefono ? `(${seleccionado.contacto_emergencia_telefono})` : ''}</dd></div>

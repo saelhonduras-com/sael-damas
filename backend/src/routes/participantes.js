@@ -5,6 +5,7 @@ const { requireAuth, requireModulo } = require('../middleware/auth');
 const xlsx = require('xlsx');
 const PDFDocument = require('pdfkit');
 const { pedidoEnMayusculas, aplicarMayusculas, mayusculasEnHoja } = require('../pdfMayusculas');
+const { nombreZona } = require('../zonaDisplay');
 
 function validarDni(dni) {
   return /^\d{13}$/.test(dni);
@@ -946,7 +947,7 @@ router.get('/admin/eventos/:evento_id/cumpleaneros/pdf', requireAuth, requireMod
         const alturaDatos = Math.max(
           doc.heightOfString(nombre, { width: anchoCol.nombre }),
           doc.heightOfString(r.capitulo || '', { width: anchoCol.capitulo }),
-          doc.heightOfString(r.zona || '', { width: anchoCol.zona }),
+          doc.heightOfString(nombreZona(r.zona), { width: anchoCol.zona }),
           doc.heightOfString(procedencia, { width: anchoCol.procedencia }),
           10
         );
@@ -960,7 +961,7 @@ router.get('/admin/eventos/:evento_id/cumpleaneros/pdf', requireAuth, requireMod
         celdaEnvuelta(nombre, col.nombre, y, anchoCol.nombre);
         celda(`${r.edad} años`, col.edad, y, anchoCol.edad);
         celdaEnvuelta(r.capitulo || '', col.capitulo, y, anchoCol.capitulo);
-        celdaEnvuelta(r.zona || '', col.zona, y, anchoCol.zona);
+        celdaEnvuelta(nombreZona(r.zona), col.zona, y, anchoCol.zona);
         celdaEnvuelta(procedencia, col.procedencia, y, anchoCol.procedencia);
         doc.y = y + altoFila;
       });
@@ -1257,7 +1258,7 @@ router.get('/admin/eventos/:evento_id/diplomas', requireAuth, requireModulo('dip
       evento_nombre: evento.rows[0].nombre,
       filas: rows.map((r, i) => ({
         numero: i + 1,
-        zona: r.zona,
+        zona: nombreZona(r.zona),
         capitulo: r.capitulo || '',
         procedencia: r.procedencia,
         nombre_completo: r.nombre_completo,
@@ -1286,7 +1287,7 @@ router.get('/admin/eventos/:evento_id/diplomas/excel', requireAuth, requireModul
 
     const datos = rows.map((r, i) => ({
       '#': i + 1,
-      ZONA: r.zona,
+      ZONA: nombreZona(r.zona),
       CAPÍTULO: r.capitulo || '',
       PROCEDENCIA: r.procedencia,
       NOMBRE: r.nombre_completo,
@@ -1425,7 +1426,7 @@ router.get('/admin/eventos/:evento_id/diplomas/pdf', requireAuth, requireModulo(
       // Zona/Capítulo/Nombre ahora se envuelven completos en vez de
       // cortarse — hay que medir cuánto ocupa cada una de verdad antes de
       // decidir la altura de la fila, o se encima con la siguiente.
-      const alturaZona = doc.heightOfString(r.zona || '', { width: anchoCol.zona });
+      const alturaZona = doc.heightOfString(nombreZona(r.zona), { width: anchoCol.zona });
       const alturaCapitulo = doc.heightOfString(r.capitulo || '', { width: anchoCol.capitulo });
       const alturaProcedencia = doc.heightOfString(r.procedencia || '', { width: anchoCol.procedencia });
       const alturaNombre = doc.heightOfString(r.nombre_completo, { width: anchoCol.nombre });
@@ -1448,7 +1449,7 @@ router.get('/admin/eventos/:evento_id/diplomas/pdf', requireAuth, requireModulo(
       }
       const y = doc.y;
       celda(String(i + 1), col.num, y, anchoCol.num);
-      celdaEnvuelta(r.zona || '', col.zona, y, anchoCol.zona);
+      celdaEnvuelta(nombreZona(r.zona), col.zona, y, anchoCol.zona);
       celdaEnvuelta(r.capitulo || '', col.capitulo, y, anchoCol.capitulo);
       celdaEnvuelta(r.procedencia || '', col.procedencia, y, anchoCol.procedencia);
       celdaEnvuelta(r.nombre_completo, col.nombre, y, anchoCol.nombre);

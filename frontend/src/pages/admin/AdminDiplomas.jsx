@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api, { mensajeError } from '../../api';
+import { nombreZona } from '../../listas';
 
 export default function AdminDiplomas() {
   const [eventoActual, setEventoActual] = useState(null);
@@ -261,7 +262,7 @@ export default function AdminDiplomas() {
                   {datos?.filas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA).map((f) => (
                     <tr key={f.numero} className="border-b border-ink/5 text-left last:border-0">
                       <td className="px-4 py-3 text-ink/60">{f.numero}</td>
-                      <td className="px-4 py-3 font-medium text-ink">{f.zona}</td>
+                      <td className="px-4 py-3 font-medium text-ink">{nombreZona(f.zona)}</td>
                       <td className="px-4 py-3 text-ink/60">{f.capitulo || '—'}</td>
                       <td className="px-4 py-3 text-ink/60">{f.procedencia || '—'}</td>
                       <td className="px-4 py-3 text-ink/60">{f.nombre_completo}</td>
