@@ -55,23 +55,10 @@ function fechaDMA(fechaISO) {
 const claseInput = 'w-full rounded-lg border border-ink/15 px-3 py-2 text-sm focus:border-ember focus:outline-none';
 const claseFiltro = 'w-48 rounded-lg border border-ink/15 px-3 py-1.5 text-xs focus:border-ember focus:outline-none';
 
-const COLORES_TAB = {
-  celeste: {
-    on: 'bg-night-2 text-white border border-night-2',
-    off: 'border border-night-2/40 bg-night-2/10 text-night-2 hover:bg-night-2/20',
-  },
-  azul: {
-    on: 'bg-night text-white border border-night',
-    off: 'border border-night/40 bg-night/10 text-night hover:bg-night/20',
-  },
-  oro: {
-    on: 'bg-gold text-night border border-gold',
-    off: 'border border-gold bg-gold/25 text-night hover:bg-gold/45',
-  },
-};
-
-function claseTab(activa, color = 'azul') {
-  return `rounded-full px-4 py-2 text-sm font-semibold transition ${COLORES_TAB[color][activa ? 'on' : 'off']}`;
+// Pestañas tipo control segmentado (cápsula con la activa rellena).
+const segContenedor = 'inline-flex flex-wrap gap-0.5 rounded-xl border border-night/15 bg-white p-1';
+function claseSeg(activa) {
+  return `rounded-lg px-4 py-2 text-sm font-semibold transition ${activa ? 'bg-night text-white shadow-sm' : 'text-night/60 hover:bg-night/5 hover:text-night'}`;
 }
 
 // Muestra siempre el tipo y el número: "DNI: …", "Pasaporte: …" o "Código interno: …".
@@ -700,14 +687,14 @@ export default function AdminParticipantes() {
         <div className="mt-4">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => setModoLista('actual')} className={claseTab(modoLista === 'actual', 'celeste')}>
+              <div className={segContenedor}>
+                <button onClick={() => setModoLista('actual')} className={claseSeg(modoLista === 'actual')}>
                   ★ Inscribiéndose ahora
                 </button>
-                <button onClick={() => setModoLista('todos')} className={claseTab(modoLista === 'todos', 'azul')}>
+                <button onClick={() => setModoLista('todos')} className={claseSeg(modoLista === 'todos')}>
                   Todos los participantes
                 </button>
-                <button onClick={() => setModoLista('cumple')} className={claseTab(modoLista === 'cumple', 'oro')}>
+                <button onClick={() => setModoLista('cumple')} className={claseSeg(modoLista === 'cumple')}>
                   🎂 Cumpleañeros ({cumpleaneros.length})
                 </button>
               </div>

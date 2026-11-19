@@ -131,7 +131,7 @@ export const ESTADOS_CIVILES = ["Soltera", "Casada", "Viuda", "Divorciada", "Uni
 // "Cargos desempeñados (histórico)" del Saelista — a diferencia de
 // CARGOS_FIHNEC (cargo actual), aquí SÍ se incluye "Servidora del SFL",
 // porque es un registro de vida completo, incluyendo su paso por SFL.
-export const CARGOS_HISTORICO = [...CARGOS_FIHNEC, "Servidora del SFL"];
+export const CARGOS_HISTORICO = [...CARGOS_FIHNEC, "Servidora del SFL", "Servidora de SAEL"];
 
 export const TIPOS_TESTIMONIO = [
   "No comparte",
