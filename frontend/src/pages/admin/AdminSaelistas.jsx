@@ -7,6 +7,13 @@ import {
   TIPOS_TESTIMONIO, FORMACION_OFICIAL, OTRAS_PARTICIPACIONES,
 } from '../../listas';
 
+// "1985-03-15" → "15/03/1985"
+function fechaDMA(fechaISO) {
+  if (!fechaISO) return '—';
+  const [a, m, d] = fechaISO.slice(0, 10).split('-');
+  return `${d}/${m}/${a}`;
+}
+
 const claseInput = 'w-full rounded-lg border border-ink/15 px-3 py-2 text-sm focus:border-ember focus:outline-none';
 const claseFiltro = 'w-48 rounded-lg border border-ink/15 px-3 py-1.5 text-xs focus:border-ember focus:outline-none';
 const btnVer = 'rounded-full border border-ink/20 px-3 py-1 text-xs font-semibold text-ink/70 hover:bg-ink/5';
@@ -603,7 +610,7 @@ export default function AdminSaelistas() {
           <h3 className="mt-6 font-display text-sm font-bold text-ink">Datos personales</h3>
           <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
             <div><dt className="text-ink/50">DNI</dt><dd className="font-medium text-ink">{seleccionado.dni || '—'}</dd></div>
-            <div><dt className="text-ink/50">Fecha de nacimiento</dt><dd className="font-medium text-ink">{seleccionado.fecha_nacimiento ? seleccionado.fecha_nacimiento.slice(0, 10) : '—'}</dd></div>
+            <div><dt className="text-ink/50">Fecha de nacimiento</dt><dd className="font-medium text-ink">{fechaDMA(seleccionado.fecha_nacimiento)}</dd></div>
             <div><dt className="text-ink/50">Celular</dt><dd className="font-medium text-ink">{seleccionado.celular || '—'}</dd></div>
             <div><dt className="text-ink/50">Email</dt><dd className="font-medium text-ink">{seleccionado.email || '—'}</dd></div>
             <div><dt className="text-ink/50">Estado civil</dt><dd className="font-medium text-ink">{seleccionado.estado_civil || '—'}</dd></div>
@@ -622,7 +629,7 @@ export default function AdminSaelistas() {
 
           <h3 className="mt-6 font-display text-sm font-bold text-ink">Organizacional / FIHNEC</h3>
           <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
-            <div><dt className="text-ink/50">Fecha inscripción capítulo</dt><dd className="font-medium text-ink">{seleccionado.fecha_inscripcion_capitulo ? seleccionado.fecha_inscripcion_capitulo.slice(0, 10) : '—'}</dd></div>
+            <div><dt className="text-ink/50">Fecha inscripción capítulo</dt><dd className="font-medium text-ink">{fechaDMA(seleccionado.fecha_inscripcion_capitulo)}</dd></div>
             <div><dt className="text-ink/50">Tiempo en FIHNEC</dt><dd className="font-medium text-ink">{seleccionado.tiempo_fihnec || '—'}</dd></div>
             <div><dt className="text-ink/50">Cargo actual</dt><dd className="font-medium text-ink">{seleccionado.cargo_actual || '—'}</dd></div>
           </dl>
