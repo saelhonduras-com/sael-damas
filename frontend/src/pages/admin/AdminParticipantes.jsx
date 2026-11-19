@@ -53,7 +53,7 @@ function fechaDMA(fechaISO) {
 }
 
 const claseInput = 'w-full rounded-lg border border-ink/15 px-3 py-2 text-sm focus:border-ember focus:outline-none';
-const claseFiltro = 'w-48 rounded-lg border border-ink/15 px-3 py-1.5 text-xs focus:border-ember focus:outline-none';
+const claseFiltro = 'w-full sm:w-48 rounded-lg border border-ink/15 px-3 py-1.5 text-xs focus:border-ember focus:outline-none';
 
 // Pestañas tipo control segmentado (cápsula con la activa rellena).
 const segContenedor = 'inline-flex flex-wrap gap-0.5 rounded-xl border border-night/15 bg-white p-1';
@@ -95,6 +95,7 @@ export default function AdminParticipantes() {
   const [totalesTodos, setTotalesTodos] = useState(null); // { total, nacionales, extranjeros, menores } — generales, sin filtros
 
   const [filtros, setFiltros] = useState(filtrosVacios);
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false); // solo aplica en celular
   const filtrosRef = useRef(filtros);
   useEffect(() => { filtrosRef.current = filtros; }, [filtros]);
 
@@ -752,7 +753,7 @@ export default function AdminParticipantes() {
                         Finalizar evento
                       </button>
 
-                      <div className="flex min-w-[340px] items-center justify-between gap-5 rounded-xl bg-night px-6 py-2.5 text-white">
+                      <div className="flex w-full items-center justify-between sm:w-auto sm:min-w-[340px] gap-5 rounded-xl bg-night px-6 py-2.5 text-white">
                         <div>
                           <p className="text-[10px] uppercase tracking-wide text-white/60">Evento actual</p>
                           <p className="font-display text-base font-bold leading-tight">{eventoActual.nombre}</p>
@@ -969,6 +970,13 @@ export default function AdminParticipantes() {
                       placeholder="Buscar por nombre o identificación"
                       className={`${claseInput} min-w-[220px] flex-1 py-1.5`}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setFiltrosAbiertos((v) => !v)}
+                      className="shrink-0 rounded-[10px] border border-night px-4 py-2 text-sm font-semibold text-night sm:hidden"
+                    >
+                      Filtros{[filtros.departamento, filtros.zona, filtros.tipo_participante].filter(Boolean).length > 0 ? ` (${[filtros.departamento, filtros.zona, filtros.tipo_participante].filter(Boolean).length})` : ''}
+                    </button>
                     {totalesTodos && (
                       <div className="flex shrink-0 items-stretch overflow-hidden rounded-xl bg-night text-white" title="Totales generales: no cambian con la búsqueda ni los filtros">
                         {[
@@ -985,7 +993,23 @@ export default function AdminParticipantes() {
                       </div>
                     )}
                   </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5 sm:hidden">
+                    {[
+                      ['departamento', filtros.departamento],
+                      ['zona', filtros.zona ? nombreZona(filtros.zona) : ''],
+                      ['tipo_participante', TIPOS_PARTICIPANTE.find((t) => t.value === filtros.tipo_participante && t.value)?.label || ''],
+                    ].filter(([, v]) => v).map(([k, v]) => (
+                      <button
+                        key={k} type="button"
+                        onClick={() => { const nuevos = { ...filtros, [k]: '' }; setFiltros(nuevos); cargarParticipantes(nuevos, 1, true); }}
+                        className="inline-flex items-center gap-1 rounded-full bg-night/10 px-2.5 py-1 text-xs font-semibold text-night"
+                      >
+                        {v} ✕
+                      </button>
+                    ))}
+                  </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <div className={`${filtrosAbiertos ? 'flex' : 'hidden'} w-full flex-col gap-2 sm:contents`}>
                     <select value={filtros.departamento} onChange={(e) => setFiltros((f) => ({ ...f, departamento: e.target.value }))} className={claseFiltro}>
                       <option value="">Todos los departamentos</option>
                       {DEPARTAMENTOS_HONDURAS.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -997,6 +1021,7 @@ export default function AdminParticipantes() {
                     <select value={filtros.tipo_participante} onChange={(e) => setFiltros((f) => ({ ...f, tipo_participante: e.target.value }))} className={claseFiltro}>
                       {TIPOS_PARTICIPANTE.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
+                    </div>
                     <button type="submit" className="ml-auto rounded-full bg-[#007334] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#005c29]">
                       Buscar
                     </button>
@@ -1104,68 +1129,83 @@ export default function AdminParticipantes() {
       )}
 
       {vista === 'detalle' && seleccionado && (
-        <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-bold text-ink">{seleccionado.nombre_completo}</h2>
-            <div className="flex gap-3">
-              <button onClick={abrirEditar} className={btnEditar}>
+        <div className="mt-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="font-display text-xl font-bold text-ink">{seleccionado.nombre_completo}</h2>
+              <p className="mt-0.5 text-xs capitalize text-ink/50">{seleccionado.tipo_participante}</p>
+            </div>
+            <div className="flex shrink-0 gap-2.5">
+              <button onClick={() => setVista('lista')} className="rounded-[10px] border border-night px-4 py-2 text-sm font-semibold text-night hover:bg-night/5">
+                ← Volver
+              </button>
+              <button onClick={abrirEditar} className="rounded-[10px] bg-[#007334] px-4 py-2 text-sm font-semibold text-white hover:bg-[#005c29]">
                 Editar
               </button>
-              <button onClick={() => setVista('lista')} className="rounded-full bg-night px-4 py-1.5 text-sm font-semibold text-white hover:opacity-90">
-                Volver
-              </button>
-              <button onClick={() => ocultarParticipante(seleccionado.id)} className={btnEliminar}>
+              <button onClick={() => ocultarParticipante(seleccionado.id)} className="rounded-[10px] border border-ember/40 bg-ember/10 px-4 py-2 text-sm font-semibold text-ember hover:bg-ember hover:text-white">
                 Eliminar
               </button>
             </div>
           </div>
 
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-            <div><dt className="text-ink/50">Identificación</dt><dd className="font-medium text-ink">{textoIdentificacion(seleccionado.tipo_identificacion, seleccionado.numero_identificacion)}</dd></div>
-            <div><dt className="text-ink/50">Tipo</dt><dd className="font-medium text-ink capitalize">{seleccionado.tipo_participante}</dd></div>
-            <div><dt className="text-ink/50">Fecha de nacimiento</dt><dd className="font-medium text-ink">{fechaDMA(seleccionado.fecha_nacimiento)}</dd></div>
-            <div><dt className="text-ink/50">Teléfono</dt><dd className="font-medium text-ink">{seleccionado.telefono_movil || '—'}</dd></div>
-            <div><dt className="text-ink/50">Departamento / Municipio</dt><dd className="font-medium text-ink">{seleccionado.departamento || '—'} / {seleccionado.municipio || '—'}</dd></div>
-            <div><dt className="text-ink/50">Capítulo</dt><dd className="font-medium text-ink">{seleccionado.capitulo || '—'}</dd></div>
-            <div><dt className="text-ink/50">Zona</dt><dd className="font-medium text-ink">{seleccionado.zona ? nombreZona(seleccionado.zona) : '—'}</dd></div>
-            <div><dt className="text-ink/50">Cargo FIHNEC</dt><dd className="font-medium text-ink">{seleccionado.cargo_fihnec || '—'}</dd></div>
-            <div><dt className="text-ink/50">Estado civil</dt><dd className="font-medium text-ink">{seleccionado.estado_civil || '—'}</dd></div>
-            <div><dt className="text-ink/50">Contacto de emergencia</dt><dd className="font-medium text-ink">{seleccionado.contacto_emergencia_nombre || '—'} {seleccionado.contacto_emergencia_telefono ? `(${seleccionado.contacto_emergencia_telefono})` : ''}</dd></div>
-            <div><dt className="text-ink/50">Total de SAELES</dt><dd className="font-medium text-ink">{seleccionado.total_saeles} <span className="text-xs text-ink/40">(solo encuentros con presencia confirmada)</span></dd></div>
-          </dl>
+          <div className="mt-5 grid gap-6 border-t border-ink/10 pt-5 lg:grid-cols-[1.25fr_1fr_1fr] lg:gap-0">
+            <div className="lg:pr-6">
+              <h3 className="font-display text-sm font-bold text-night">Datos personales</h3>
+              <dl className="mt-2 grid grid-cols-1 gap-x-5 gap-y-3 text-sm sm:grid-cols-2">
+                <div><dt className="text-xs text-ink/50">Identificación</dt><dd className="font-medium text-ink">{textoIdentificacion(seleccionado.tipo_identificacion, seleccionado.numero_identificacion)}</dd></div>
+                <div><dt className="text-xs text-ink/50">Fecha de nacimiento</dt><dd className="font-medium text-ink">{fechaDMA(seleccionado.fecha_nacimiento)}</dd></div>
+                <div><dt className="text-xs text-ink/50">Teléfono</dt><dd className="font-medium text-ink">{seleccionado.telefono_movil || '—'}</dd></div>
+                <div><dt className="text-xs text-ink/50">Estado civil</dt><dd className="font-medium text-ink">{seleccionado.estado_civil || '—'}</dd></div>
+                <div className="sm:col-span-2"><dt className="text-xs text-ink/50">Contacto de emergencia</dt><dd className="font-medium text-ink">{seleccionado.contacto_emergencia_nombre || '—'} {seleccionado.contacto_emergencia_telefono ? `(${seleccionado.contacto_emergencia_telefono})` : ''}</dd></div>
+              </dl>
+            </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-display text-sm font-bold text-ink">Historial de inscripciones</h3>
-            {eventoActual?.abierto && !seleccionado.inscripciones.some((i) => Number(i.evento_id) === Number(eventoActual.id)) && (
-              <button onClick={() => inscribirAlEventoActual(seleccionado.id)} className={btnEditar}>
-                Inscribir a {eventoActual.nombre}
-              </button>
-            )}
+            <div className="lg:border-l lg:border-ink/10 lg:px-6">
+              <h3 className="font-display text-sm font-bold text-night">Ubicación y FIHNEC</h3>
+              <dl className="mt-2 grid grid-cols-1 gap-x-5 gap-y-3 text-sm sm:grid-cols-2">
+                <div><dt className="text-xs text-ink/50">Capítulo</dt><dd className="font-medium text-ink">{seleccionado.capitulo || '—'}</dd></div>
+                <div><dt className="text-xs text-ink/50">Zona</dt><dd className="font-medium text-ink">{nombreZona(seleccionado.zona) || '—'}</dd></div>
+                <div className="sm:col-span-2"><dt className="text-xs text-ink/50">Departamento / Municipio</dt><dd className="font-medium text-ink">{seleccionado.departamento || '—'} / {seleccionado.municipio || '—'}</dd></div>
+                <div className="sm:col-span-2"><dt className="text-xs text-ink/50">Cargo FIHNEC</dt><dd className="font-medium text-ink">{seleccionado.cargo_fihnec || '—'}</dd></div>
+                <div className="sm:col-span-2"><dt className="text-xs text-ink/50">Total de SAELES</dt><dd className="font-medium text-ink">{seleccionado.total_saeles} <span className="text-xs text-ink/40">(solo encuentros con presencia confirmada)</span></dd></div>
+              </dl>
+            </div>
+
+            <div className="lg:border-l lg:border-ink/10 lg:pl-6">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-display text-sm font-bold text-night">Historial de inscripciones</h3>
+                {eventoActual?.abierto && !seleccionado.inscripciones.some((i) => Number(i.evento_id) === Number(eventoActual.id)) && (
+                  <button onClick={() => inscribirAlEventoActual(seleccionado.id)} className="rounded-[10px] bg-[#007334] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#005c29]">
+                    Inscribir a {eventoActual.nombre}
+                  </button>
+                )}
+              </div>
+              {seleccionado.inscripciones.length === 0 ? (
+                <p className="mt-2 text-sm text-ink/40">Sin inscripciones registradas todavía.</p>
+              ) : (
+                <ul className="mt-2 space-y-2">
+                  {seleccionado.inscripciones.map((i) => (
+                    <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-ink/5 px-3 py-2 text-sm text-ink/70">
+                      <span>{i.evento_nombre} — {i.fecha_inicio.slice(0, 10)}</span>
+                      <label className="flex items-center gap-2 text-xs text-ink/60">
+                        <input
+                          type="checkbox"
+                          checked={i.registrado_presencial}
+                          onChange={(e) => marcarPresencial(i.id, e.target.checked)}
+                        />
+                        Registrado presencial
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
-          {seleccionado.inscripciones.length === 0 ? (
-            <p className="mt-2 text-sm text-ink/40">Sin inscripciones registradas todavía.</p>
-          ) : (
-            <ul className="mt-2 space-y-2">
-              {seleccionado.inscripciones.map((i) => (
-                <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-ink/5 px-3 py-2 text-sm text-ink/70">
-                  <span>{i.evento_nombre} — {i.fecha_inicio.slice(0, 10)}</span>
-                  <label className="flex items-center gap-2 text-xs text-ink/60">
-                    <input
-                      type="checkbox"
-                      checked={i.registrado_presencial}
-                      onChange={(e) => marcarPresencial(i.id, e.target.checked)}
-                    />
-                    Registrado presencial
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       )}
 
       {vista === 'editar' && formEditar && (
-        <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+        <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-ink/10 bg-white p-6 pb-24 sm:pb-6 shadow-sm">
           <h2 className="font-display text-lg font-bold text-ink">Editar participante</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="sm:col-span-2">
@@ -1246,9 +1286,9 @@ export default function AdminParticipantes() {
               <input type="text" value={formEditar.contacto_emergencia_telefono} onChange={(e) => setFormEditar((f) => ({ ...f, contacto_emergencia_telefono: e.target.value.replace(/\D/g, '').slice(0, 8) }))} className={claseInput} />
             </label>
           </div>
-          <div className="mt-6 flex justify-end gap-3">
-            <button onClick={() => setVista('detalle')} className="rounded-full border border-ink/20 px-5 py-2 text-sm font-semibold text-ink/70 hover:bg-ink/5">Cancelar</button>
-            <button onClick={guardarEdicion} disabled={guardando} className="rounded-full bg-ember px-5 py-2 text-sm font-semibold text-white hover:bg-ember-light disabled:opacity-50">
+          <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t border-ink/10 bg-white p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] sm:static sm:z-auto sm:mt-6 sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none [&>*:first-child]:flex-none [&>*:last-child]:flex-1 sm:[&>*:last-child]:flex-none">
+            <button onClick={() => setVista('detalle')} className="rounded-2xl border border-ink/20 px-5 py-3.5 text-base font-semibold text-ink/70 sm:rounded-full sm:py-2 sm:text-sm hover:bg-ink/5">Cancelar</button>
+            <button onClick={guardarEdicion} disabled={guardando} className="rounded-2xl bg-ember px-5 py-3.5 text-base font-bold sm:rounded-full sm:py-2 sm:text-sm sm:font-semibold text-white hover:bg-ember-light disabled:opacity-50">
               {guardando ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
@@ -1256,7 +1296,7 @@ export default function AdminParticipantes() {
       )}
 
       {vista === 'extranjero' && (
-        <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+        <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-ink/10 bg-white p-6 pb-24 sm:pb-6 shadow-sm">
           <h2 className="font-display text-lg font-bold text-ink">Agregar participante extranjero</h2>
           <p className="mt-1 text-xs text-ink/50">
             Solo el nombre, el número de pasaporte y el evento son obligatorios. Este registro queda inscrito
@@ -1353,9 +1393,9 @@ export default function AdminParticipantes() {
               <input type="text" value={formExtranjero.contacto_emergencia_telefono} onChange={(e) => setFormExtranjero((f) => ({ ...f, contacto_emergencia_telefono: e.target.value.replace(/\D/g, '').slice(0, 8) }))} className={claseInput} />
             </label>
           </div>
-          <div className="mt-6 flex justify-end gap-3">
-            <button onClick={() => setVista('lista')} className="rounded-full border border-ink/20 px-5 py-2 text-sm font-semibold text-ink/70 hover:bg-ink/5">Cancelar</button>
-            <button onClick={guardarExtranjero} disabled={guardando} className="rounded-full bg-ember px-5 py-2 text-sm font-semibold text-white hover:bg-ember-light disabled:opacity-50">
+          <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t border-ink/10 bg-white p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] sm:static sm:z-auto sm:mt-6 sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none [&>*:first-child]:flex-none [&>*:last-child]:flex-1 sm:[&>*:last-child]:flex-none">
+            <button onClick={() => setVista('lista')} className="rounded-2xl border border-ink/20 px-5 py-3.5 text-base font-semibold text-ink/70 sm:rounded-full sm:py-2 sm:text-sm hover:bg-ink/5">Cancelar</button>
+            <button onClick={guardarExtranjero} disabled={guardando} className="rounded-2xl bg-ember px-5 py-3.5 text-base font-bold sm:rounded-full sm:py-2 sm:text-sm sm:font-semibold text-white hover:bg-ember-light disabled:opacity-50">
               {guardando ? 'Guardando…' : 'Guardar e inscribir'}
             </button>
           </div>
@@ -1363,7 +1403,7 @@ export default function AdminParticipantes() {
       )}
 
       {vista === 'menor' && (
-        <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+        <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-ink/10 bg-white p-6 pb-24 sm:pb-6 shadow-sm">
           <h2 className="font-display text-lg font-bold text-ink">Agregar menor de edad</h2>
           <p className="mt-1 text-xs text-ink/50">
             Si el menor no tiene DNI, el sistema le asigna un código interno (MEN-00001…); si lo trae, anótalo.
@@ -1431,9 +1471,9 @@ export default function AdminParticipantes() {
               </select>
             </label>
           </div>
-          <div className="mt-6 flex justify-end gap-3">
-            <button onClick={() => setVista('lista')} className="rounded-full border border-ink/20 px-5 py-2 text-sm font-semibold text-ink/70 hover:bg-ink/5">Cancelar</button>
-            <button onClick={guardarMenor} disabled={guardando} className="rounded-full bg-ember px-5 py-2 text-sm font-semibold text-white hover:bg-ember-light disabled:opacity-50">
+          <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t border-ink/10 bg-white p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] sm:static sm:z-auto sm:mt-6 sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none [&>*:first-child]:flex-none [&>*:last-child]:flex-1 sm:[&>*:last-child]:flex-none">
+            <button onClick={() => setVista('lista')} className="rounded-2xl border border-ink/20 px-5 py-3.5 text-base font-semibold text-ink/70 sm:rounded-full sm:py-2 sm:text-sm hover:bg-ink/5">Cancelar</button>
+            <button onClick={guardarMenor} disabled={guardando} className="rounded-2xl bg-ember px-5 py-3.5 text-base font-bold sm:rounded-full sm:py-2 sm:text-sm sm:font-semibold text-white hover:bg-ember-light disabled:opacity-50">
               {guardando ? 'Guardando…' : 'Guardar e inscribir'}
             </button>
           </div>
