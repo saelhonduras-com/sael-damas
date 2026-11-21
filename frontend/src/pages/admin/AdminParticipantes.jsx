@@ -66,6 +66,26 @@ function textoIdentificacion(tipo, numero) {
   return tipo ? `${tipo}: ${numero}` : numero;
 }
 
+// Reglas de la identificación al EDITAR, según el tipo que ya tiene la persona.
+// Devuelve un mensaje de error ('' si está bien o si no se está cambiando).
+function errorIdentificacion(tipo, valor) {
+  const v = (valor || '').trim();
+  if (!v) return '';
+  if (tipo === 'Pasaporte') {
+    return /^[A-Z0-9]{5,20}$/.test(v) ? '' : 'Pasaporte: letras y números, de 5 a 20 caracteres.';
+  }
+  if (v.length < 13) return `Faltan ${13 - v.length} dígito${13 - v.length === 1 ? '' : 's'} (el DNI tiene 13).`;
+  if (/^(\d)\1{12}$/.test(v) || v.startsWith('0000') || '01234567890123456789'.includes(v) || '98765432109876543210'.includes(v)) {
+    return 'Ese DNI no parece real. Revisa los dígitos.';
+  }
+  return '';
+}
+
+// "0801199012345" → "0801-1990-12345"
+function formatoDni(v) {
+  return /^\d{13}$/.test(v || '') ? `${v.slice(0, 4)}-${v.slice(4, 8)}-${v.slice(8)}` : v;
+}
+
 // Botones de acción en filas de tabla y en el detalle. Paleta a propósito:
 // ver = neutral (blanco), editar = verde, eliminar = rojo (ember).
 const btnVer = 'rounded-full border border-ink/20 px-3 py-1 text-xs font-semibold text-ink/70 hover:bg-ink/5';
@@ -124,6 +144,9 @@ export default function AdminParticipantes() {
   const [baseCumple, setBaseCumple] = useState([]);
   const [eventosAbiertos, setEventosAbiertos] = useState([]);
   const [guardando, setGuardando] = useState(false);
+  const [avisoGuardado, setAvisoGuardado] = useState(''); // mensaje de éxito tras guardar la ficha
+  const [confirmIdent, setConfirmIdent] = useState(null); // { tipo, anterior, nueva } | null
+  const [duplicadoIdent, setDuplicadoIdent] = useState(null); // { id, nombre, mensaje } | null
 
   const [estadisticas, setEstadisticas] = useState(null);
   const [eventoActual, setEventoActual] = useState(null);
@@ -466,7 +489,10 @@ export default function AdminParticipantes() {
   }
 
   function abrirEditar() {
+    setDuplicadoIdent(null);
     setFormEditar({
+      // Menor con código interno: el campo arranca vacío (solo se llena si se le pone un DNI real).
+      numero_identificacion: seleccionado.tipo_identificacion === 'Código interno' ? '' : (seleccionado.numero_identificacion || ''),
       nombre_completo: seleccionado.nombre_completo || '',
       fecha_nacimiento: seleccionado.fecha_nacimiento ? seleccionado.fecha_nacimiento.slice(0, 10) : '',
       telefono_movil: seleccionado.telefono_movil || '',
@@ -484,16 +510,56 @@ export default function AdminParticipantes() {
     setVista('editar');
   }
 
+  // ¿Se está cambiando la identificación en el formulario?
+  const identCambia = !!formEditar && !!seleccionado
+    && (formEditar.numero_identificacion || '').trim() !== ''
+    && formEditar.numero_identificacion.trim() !== seleccionado.numero_identificacion;
+  const errorIdentEditar = formEditar && seleccionado && identCambia
+    ? errorIdentificacion(seleccionado.tipo_identificacion, formEditar.numero_identificacion)
+    : '';
+
+  // Paso previo: si cambió la identificación, se pide confirmar viendo anterior → nueva.
+  async function pedirGuardarEdicion() {
+    if (identCambia && !errorIdentEditar) {
+      const base = {
+        tipo: seleccionado.tipo_identificacion === 'Pasaporte' ? 'Pasaporte' : 'DNI',
+        anterior: seleccionado.numero_identificacion,
+        nueva: formEditar.numero_identificacion.trim(),
+        duplicado: null,
+      };
+      // Se verifica ANTES de mostrar el modal: si ya existe, el modal avisa y no deja guardar.
+      try {
+        const { data } = await api.get('/admin/participantes/verificar-identificacion', {
+          params: { numero: base.nueva, excluir_id: seleccionado.id },
+        });
+        base.duplicado = data.duplicado;
+      } catch (err) {
+        setError(mensajeError(err));
+        return;
+      }
+      setConfirmIdent(base);
+    } else {
+      guardarEdicion();
+    }
+  }
+
   async function guardarEdicion() {
     setGuardando(true);
     setError('');
+    setDuplicadoIdent(null);
     try {
-      await api.put(`/admin/participantes/${seleccionado.id}`, formEditar);
+      const { data: respuesta } = await api.put(`/admin/participantes/${seleccionado.id}`, formEditar);
       await recargarDetalle(seleccionado.id);
       setVista('detalle');
       cargarParticipantes(filtrosRef.current, 1, true);
+      setAvisoGuardado(respuesta?.identificacion_cambiada
+        ? 'Cambios guardados. La identificación se actualizó y quedó en la bitácora.'
+        : 'Cambios guardados exitosamente.');
+      setTimeout(() => setAvisoGuardado(''), 3500);
     } catch (err) {
-      setError(mensajeError(err));
+      const dup = err?.response?.data?.duplicado;
+      if (dup) setDuplicadoIdent({ id: dup.id, nombre: dup.nombre, mensaje: err.response.data.error });
+      else setError(mensajeError(err));
     } finally {
       setGuardando(false);
     }
@@ -1201,6 +1267,24 @@ export default function AdminParticipantes() {
               )}
             </div>
           </div>
+
+          {seleccionado.bitacora_identificacion?.length > 0 && (
+            <div className="mt-5 border-t border-ink/10 pt-5">
+              <h3 className="font-display text-sm font-bold text-night">Historial de cambios de identificación</h3>
+              <ul className="mt-2 space-y-2">
+                {seleccionado.bitacora_identificacion.map((b) => (
+                  <li key={b.id} className="rounded-lg bg-ink/5 px-3 py-2 text-sm text-ink/70">
+                    <span className="font-mono text-ink/50 line-through">{formatoDni(b.identificacion_anterior)}</span>
+                    <span className="mx-2 text-ink/40">→</span>
+                    <span className="font-mono font-semibold text-ink">{formatoDni(b.identificacion_nueva)}</span>
+                    <span className="mt-0.5 block text-xs text-ink/50">
+                      {new Date(b.creado_en).toLocaleString('es-HN', { dateStyle: 'medium', timeStyle: 'short' })} · por {b.usuario_nombre}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
@@ -1208,7 +1292,48 @@ export default function AdminParticipantes() {
         <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-ink/10 bg-white p-6 pb-24 sm:pb-6 shadow-sm">
           <h2 className="font-display text-lg font-bold text-ink">Editar participante</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="sm:col-span-2">
+            <div>
+              <span className="mb-1 block text-xs font-semibold text-ink/60">
+                {seleccionado.tipo_identificacion === 'Pasaporte' ? 'Pasaporte' : seleccionado.tipo_identificacion === 'Código interno' ? 'Identificación (menor)' : 'DNI'}
+              </span>
+              {seleccionado.tipo_identificacion === 'Código interno' && (
+                <p className="mb-2 rounded-lg bg-ink/5 px-3 py-2 text-xs text-ink/60">
+                  Código del sistema: <span className="font-mono font-bold text-ink">{seleccionado.numero_identificacion}</span> (se mantiene).
+                  Si el menor ya tiene DNI, escríbelo abajo para reemplazarlo.
+                </p>
+              )}
+              <input
+                type="text"
+                inputMode={seleccionado.tipo_identificacion === 'Pasaporte' ? 'text' : 'numeric'}
+                maxLength={seleccionado.tipo_identificacion === 'Pasaporte' ? 20 : 13}
+                placeholder={seleccionado.tipo_identificacion === 'Código interno' ? 'Opcional: DNI de 13 dígitos' : ''}
+                value={formEditar.numero_identificacion}
+                onChange={(e) => {
+                  setDuplicadoIdent(null);
+                  const v = seleccionado.tipo_identificacion === 'Pasaporte'
+                    ? e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20)
+                    : e.target.value.replace(/\D/g, '').slice(0, 13);
+                  setFormEditar((f) => ({ ...f, numero_identificacion: v }));
+                }}
+                className={`${claseInput} font-mono tracking-wide ${errorIdentEditar || duplicadoIdent ? 'border-ember' : ''}`}
+              />
+              {seleccionado.tipo_identificacion !== 'Pasaporte' && (formEditar.numero_identificacion || '').length > 0 && (
+                <p className="mt-1 text-xs text-ink/40">{formEditar.numero_identificacion.length} / 13 dígitos</p>
+              )}
+              {errorIdentEditar && <p className="mt-1 text-xs font-semibold text-ember">{errorIdentEditar}</p>}
+              {duplicadoIdent && (
+                <p className="mt-1 text-xs font-semibold text-ember">
+                  {duplicadoIdent.mensaje}{' '}
+                  <button type="button" onClick={() => { setDuplicadoIdent(null); abrirDetalle(duplicadoIdent.id); }} className="underline">
+                    Ver a {duplicadoIdent.nombre}
+                  </button>
+                </p>
+              )}
+              {identCambia && !errorIdentEditar && !duplicadoIdent && (
+                <p className="mt-1 text-xs text-ink/50">Al guardar se te pedirá confirmar el cambio y quedará registrado en la bitácora.</p>
+              )}
+            </div>
+            <label>
               <span className="mb-1 block text-xs font-semibold text-ink/60">Nombre completo</span>
               <input type="text" value={formEditar.nombre_completo} onChange={(e) => setFormEditar((f) => ({ ...f, nombre_completo: e.target.value }))} className={claseInput} />
             </label>
@@ -1288,7 +1413,7 @@ export default function AdminParticipantes() {
           </div>
           <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t border-ink/10 bg-white p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] sm:static sm:z-auto sm:mt-6 sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none [&>*:first-child]:flex-none [&>*:last-child]:flex-1 sm:[&>*:last-child]:flex-none">
             <button onClick={() => setVista('detalle')} className="rounded-2xl border border-ink/20 px-5 py-3.5 text-base font-semibold text-ink/70 sm:rounded-full sm:py-2 sm:text-sm hover:bg-ink/5">Cancelar</button>
-            <button onClick={guardarEdicion} disabled={guardando} className="rounded-2xl bg-ember px-5 py-3.5 text-base font-bold sm:rounded-full sm:py-2 sm:text-sm sm:font-semibold text-white hover:bg-ember-light disabled:opacity-50">
+            <button onClick={pedirGuardarEdicion} disabled={guardando || !!errorIdentEditar} className="rounded-2xl bg-ember px-5 py-3.5 text-base font-bold sm:rounded-full sm:py-2 sm:text-sm sm:font-semibold text-white hover:bg-ember-light disabled:opacity-50">
               {guardando ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
@@ -1476,6 +1601,45 @@ export default function AdminParticipantes() {
             <button onClick={guardarMenor} disabled={guardando} className="rounded-2xl bg-ember px-5 py-3.5 text-base font-bold sm:rounded-full sm:py-2 sm:text-sm sm:font-semibold text-white hover:bg-ember-light disabled:opacity-50">
               {guardando ? 'Guardando…' : 'Guardar e inscribir'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {avisoGuardado && (
+        <div className="fixed inset-x-4 bottom-6 z-[60] mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-[#007334] px-5 py-3.5 text-sm font-semibold text-white shadow-lg">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 text-base">✓</span>
+          <span>{avisoGuardado}</span>
+        </div>
+      )}
+
+      {confirmIdent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
+            <h3 className="font-display text-lg font-bold text-ink">
+              {confirmIdent.duplicado ? `Este ${confirmIdent.tipo} ya existe` : '¿Cambiar la identificación?'}
+            </h3>
+            <p className="mt-1 text-sm text-ink/60">{seleccionado?.nombre_completo}</p>
+            <div className="mt-4 space-y-2 rounded-xl bg-ink/5 p-3 text-sm">
+              <p><span className="text-xs text-ink/50">Antes</span><br /><span className="font-mono text-ink/60 line-through">{formatoDni(confirmIdent.anterior)}</span></p>
+              <p><span className="text-xs text-ink/50">Después</span><br /><span className="font-mono text-base font-bold text-ink">{formatoDni(confirmIdent.nueva)}</span></p>
+            </div>
+            {confirmIdent.duplicado ? (
+              <div className="mt-3 rounded-xl border border-ember/30 bg-ember/10 p-3 text-sm text-ember">
+                <p className="font-semibold">Duplicado: este {confirmIdent.tipo} ya pertenece a</p>
+                <p className="mt-0.5 text-base font-bold">{confirmIdent.duplicado.nombre}</p>
+                <p className="mt-1 text-xs text-ember/80">No se puede guardar el cambio. Revisa el número o corrige primero el otro registro.</p>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-ink/50">Quedará registrado en la bitácora con tu nombre, la fecha y la hora.</p>
+            )}
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={() => setConfirmIdent(null)} className="rounded-full border border-ink/20 px-4 py-1.5 text-sm font-semibold text-ink/70 hover:bg-ink/5">Revisar</button>
+              {confirmIdent.duplicado ? (
+                <button onClick={() => { const id = confirmIdent.duplicado.id; setConfirmIdent(null); abrirDetalle(id); }} className="rounded-full bg-night px-4 py-1.5 text-sm font-semibold text-white hover:opacity-90">Ver a {confirmIdent.duplicado.nombre.split(' ')[0]}</button>
+              ) : (
+                <button onClick={() => { setConfirmIdent(null); guardarEdicion(); }} className="rounded-full bg-ember px-4 py-1.5 text-sm font-semibold text-white hover:bg-ember-light">Sí, cambiar y guardar</button>
+              )}
+            </div>
           </div>
         </div>
       )}

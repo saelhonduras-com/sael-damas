@@ -209,7 +209,7 @@ router.get('/admin/respaldo', async (req, res) => {
       datos[tabla] = rows;
     }
     const respaldo = { version: 1, generado_en: new Date().toISOString(), tablas: datos };
-    const nombreArchivo = `respaldo-sael-jovenes-${new Date().toISOString().slice(0, 10)}.json`;
+    const nombreArchivo = `respaldo-sael-damas-${new Date().toISOString().slice(0, 10)}.json`;
     res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
     res.setHeader('Content-Type', 'application/json');
     res.send(JSON.stringify(respaldo, null, 2));
