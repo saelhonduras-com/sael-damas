@@ -1025,7 +1025,7 @@ router.get('/admin/eventos/:evento_id/cumpleaneros/pdf', requireAuth, requireMod
         xTexto = cajaX;
       }
       doc.fillColor('#1F3464').fontSize(16).text('SAEL Damas · FIHNEC', xTexto, 18, { lineBreak: false });
-      doc.fontSize(10).fillColor('#E40521').text(`Cumpleañeros — ${ev.nombre}`, xTexto, 40, { lineBreak: false });
+      doc.fontSize(10).fillColor('#E40521').text(`Cumpleañeras — ${ev.nombre}`, xTexto, 40, { lineBreak: false });
 
       const anchoTotales = 220;
       const xTotales = anchoPagina - margenX - anchoTotales;

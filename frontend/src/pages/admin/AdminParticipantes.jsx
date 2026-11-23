@@ -7,6 +7,7 @@ import {
   ZONAS_FIHNEC, nombreZona,
   ZONAS_POR_DEPARTAMENTO,
   CARGOS_FIHNEC,
+  soloDigitosDni, formatoDniEscribiendo,
   ESTADOS_CIVILES,
 } from '../../listas';
 import SelectorFecha from '../../components/SelectorFecha';
@@ -155,6 +156,8 @@ export default function AdminParticipantes() {
   const [cobrando, setCobrando] = useState(null); // { inscripcion, cuentaId, banco_o_recibo, observaciones_pago } | null
   const [opcionesInscripcion, setOpcionesInscripcion] = useState([]); // las 3 cuentas: boletos_evento, boletos_bancos, cortesia
   const [guardandoCobro, setGuardandoCobro] = useState(false);
+  // Resultado del registro/cobro — SIEMPRE se muestra un modal (confirmado, cancelado o con error).
+  const [resultadoCobro, setResultadoCobro] = useState(null); // { tipo: 'ok'|'cancelado'|'error', nombre, detalle } | null
 
   const [error, setError] = useState('');
 
@@ -292,7 +295,7 @@ export default function AdminParticipantes() {
   // actualiza la lista localmente (ya tienes el botón "↻ Refrescar"
   // aparte, si necesitas que el Resumen del sidebar también se ponga
   // al día).
-  function pedirDesmarcar(inscripcion) {
+  function pedirDesmarcar(inscripcion, alTerminar) {
     pedirConfirmacion({
       mensaje: `Vas a desmarcar "Registrado" para ${inscripcion.nombre_completo}. Si tenía boleto asignado, se intentará devolver al contador (solo si era el último entregado — si no, el número queda anulado). Su información de pago deja de contar en Control de Ingresos. ¿Confirmas?`,
       textoConfirmar: 'Sí, desmarcar',
@@ -303,8 +306,9 @@ export default function AdminParticipantes() {
           setInscripcionesActual((prev) => prev.map((i) =>
             i.inscripcion_id === inscripcion.inscripcion_id ? { ...i, registrado_presencial: false } : i
           ));
-          setRegistradosActual((prev) => prev - 1);
+          if (!inscripcion.evento_id || Number(inscripcion.evento_id) === Number(eventoActual?.id)) setRegistradosActual((prev) => prev - 1);
           refrescarResumen();
+          if (alTerminar) await alTerminar();
         } catch (err) {
           setError(mensajeError(err));
         }
@@ -324,13 +328,14 @@ export default function AdminParticipantes() {
       cuentaId: '', // '' = sin seleccionar (opcional)
       banco_o_recibo: '',
       observaciones_pago: '',
+      alTerminar: inscripcion.alTerminar || null, // p. ej. recargar la ficha si se registró desde ahí
     });
     try {
       // Las 4 opciones vienen directo del Catálogo de Cuentas, buscadas
       // por su clave interna (no por nombre/código, que son libres de
       // editar): boletos_evento (4.1.1), boletos_bancos (4.1.2),
       // cortesia (4.1.4), y boletos_tarjeta (4.1.5).
-      const { data: cuentas } = await api.get(`/admin/eventos/${eventoActual.id}/valores-cuenta`, { params: { tipo: 'ingreso' } });
+      const { data: cuentas } = await api.get(`/admin/eventos/${inscripcion.evento_id || eventoActual.id}/valores-cuenta`, { params: { tipo: 'ingreso' } });
       const claves = ['boletos_evento', 'boletos_bancos', 'boletos_tarjeta', 'cortesia'];
       const opciones = claves
         .map((clave) => cuentas.find((c) => c.clave_sistema === clave))
@@ -371,15 +376,23 @@ export default function AdminParticipantes() {
         banco_o_recibo: opcion.pideBanco ? cobrando.banco_o_recibo : null,
         observaciones_pago: cobrando.observaciones_pago,
       });
+      const alTerminar = cobrando.alTerminar;
+      const nombreRegistrada = cobrando.inscripcion.nombre_completo;
       setCobrando(null);
       refrescarResumen();
+      setResultadoCobro({
+        tipo: 'ok',
+        nombre: nombreRegistrada,
+        detalle: opcion.monto > 0 ? `${opcion.nombre} · Cobrado: L. ${opcion.monto}` : `${opcion.nombre} · Sin cobro`,
+      });
+      if (alTerminar) await alTerminar();
       // Se limpia el filtro de búsqueda y se recarga la lista completa —
       // así el que se acaba de registrar ya aparece al final (los
       // registrados quedan siempre al fondo, ordenados por el backend).
       setBuscarActual('');
       cargarInscripcionesEventoActual('');
     } catch (err) {
-      setError(mensajeError(err));
+      setResultadoCobro({ tipo: 'error', nombre: cobrando.inscripcion.nombre_completo, detalle: mensajeError(err) });
     } finally {
       setGuardandoCobro(false);
     }
@@ -660,7 +673,7 @@ export default function AdminParticipantes() {
     }
   }
 
-  // --- Cumpleañeros del evento actual: quien cumple años entre el primer y
+  // --- Cumpleañeras del evento actual: quien cumple años entre el primer y
   // el último día del evento (así se les pueden cantar las mañanitas ahí).
   const cumpleaneros = (() => {
     if (!eventoActual || baseCumple.length === 0) return [];
@@ -685,7 +698,7 @@ export default function AdminParticipantes() {
   // Honduras es UTC-6 todo el año
   const hoyHN = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  // Cumpleañeros agrupados por día del evento (viernes, sábado, domingo…), en orden.
+  // Cumpleañeras agrupados por día del evento (viernes, sábado, domingo…), en orden.
   const gruposCumple = [];
   cumpleaneros.forEach((c) => {
     const clave = c.dia.toISOString().slice(0, 10);
@@ -731,7 +744,7 @@ export default function AdminParticipantes() {
         window.URL.revokeObjectURL(url);
       }
     } catch (err) {
-      setError('No se pudo generar el PDF de cumpleañeros.');
+      setError('No se pudo generar el PDF de cumpleañeras.');
       if (ventana) ventana.close();
     } finally {
       setDescargandoCumple('');
@@ -762,7 +775,7 @@ export default function AdminParticipantes() {
                   Todos los participantes
                 </button>
                 <button onClick={() => setModoLista('cumple')} className={claseSeg(modoLista === 'cumple')}>
-                  🎂 Cumpleañeros ({cumpleaneros.length})
+                  🎂 Cumpleañeras ({cumpleaneros.length})
                 </button>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -814,12 +827,12 @@ export default function AdminParticipantes() {
 
                       <button
                         onClick={finalizarEventoActual}
-                        className="rounded-full bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-ember-light"
+                        className="hidden rounded-full sm:block bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-ember-light"
                       >
                         Finalizar evento
                       </button>
 
-                      <div className="flex w-full items-center justify-between sm:w-auto sm:min-w-[340px] gap-5 rounded-xl bg-night px-6 py-2.5 text-white">
+                      <div className="hidden w-full items-center justify-between sm:flex sm:w-auto sm:min-w-[340px] gap-5 rounded-xl bg-night px-6 py-2.5 text-white">
                         <div>
                           <p className="text-[10px] uppercase tracking-wide text-white/60">Evento actual</p>
                           <p className="font-display text-base font-bold leading-tight">{eventoActual.nombre}</p>
@@ -832,8 +845,39 @@ export default function AdminParticipantes() {
                     </div>
 
                     {cargandoActual ? <p className="mt-6 text-ink/40">Cargando…</p> : (
-                      <div className="mt-3 overflow-x-auto rounded-2xl border border-ink/10 bg-white shadow-sm">
-                        <table className="w-full text-sm">
+                      <div className="mt-3 overflow-x-auto rounded-2xl sm:border sm:border-ink/10 sm:bg-white sm:shadow-sm">
+                        {/* ===== Celular: tarjetas con botón grande ===== */}
+                        <div className="space-y-3 sm:hidden">
+                          {inscripcionesActual.length === 0 && (
+                            <p className="rounded-2xl bg-white p-5 text-center text-sm text-ink/40">Nadie se ha inscrito todavía a este evento.</p>
+                          )}
+                          {inscripcionesActual.slice((paginaActualSegura - 1) * porPaginaActual, paginaActualSegura * porPaginaActual).map((i) => (
+                            <div key={i.inscripcion_id} className="rounded-2xl border border-ink/10 bg-white p-4 shadow-sm">
+                              <p className="font-display text-base font-bold text-ink">
+                                {i.nombre_completo}
+                                {i.tipo_participante === 'extranjero' && <span className="ml-2 rounded-full bg-night/10 px-2 py-0.5 text-xs font-semibold text-night">Extranjera</span>}
+                                {i.tipo_participante === 'menor' && <span className="ml-2 rounded-full bg-gold/30 px-2 py-0.5 text-xs font-semibold text-night">Menor</span>}
+                                {idsCumpleaneros.has(i.participante_id) && <span title="Cumple años durante el evento" className="ml-2">🎂</span>}
+                              </p>
+                              <p className="mt-0.5 text-sm text-ink/60">
+                                {i.tipo_identificacion === 'DNI' ? formatoDni(i.numero_identificacion) : textoIdentificacion(i.tipo_identificacion, i.numero_identificacion)}
+                                {i.capitulo ? ` · ${i.capitulo}` : ''}{i.zona ? ` · ${nombreZona(i.zona)}` : ''}
+                              </p>
+                              <div className="mt-3 flex gap-2">
+                                {i.registrado_presencial ? (
+                                  <button onClick={() => pedirDesmarcar(i)} className="flex-1 rounded-xl bg-[#007334]/10 py-3 text-base font-semibold text-[#007334]">✓ Registrada</button>
+                                ) : (
+                                  <button onClick={() => abrirCobro(i)} className="flex-1 rounded-xl bg-[#007334] py-3 text-base font-semibold text-white active:bg-[#005c29]">Registrar y cobrar</button>
+                                )}
+                                <button onClick={() => abrirDetalle(i.participante_id)} className="rounded-xl border-2 border-night px-5 py-3 text-base font-semibold text-night">Ver</button>
+                                {!i.registrado_presencial && (
+                                  <button onClick={() => eliminarInscripcion(i.inscripcion_id, i.registrado_presencial)} aria-label="Eliminar inscripción" className="rounded-xl border border-ember/40 bg-ember/10 px-4 py-3 text-base text-ember">🗑</button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <table className="hidden w-full text-sm sm:table">
                           <thead>
                             <tr className="border-b border-ink/10 bg-[#1F3464]/12 text-left text-xs uppercase tracking-wide text-[#1F3464]">
                               <th className="px-4 py-3">Nombre</th>
@@ -947,7 +991,7 @@ export default function AdminParticipantes() {
                   <>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-gold bg-gold/15 px-5 py-3">
                       <div>
-                        <p className="font-display text-lg font-bold text-night">🎂 Cumpleañeros de {eventoActual.nombre} ({cumpleaneros.length})</p>
+                        <p className="font-display text-lg font-bold text-night">🎂 Cumpleañeras de {eventoActual.nombre} ({cumpleaneros.length})</p>
                         <p className="text-xs text-ink/60">
                           Quienes cumplen años del {fechaDMA(eventoActual.fecha_inicio)} al {fechaDMA(eventoActual.fecha_fin)}, ordenados por día.
                         </p>
@@ -1257,7 +1301,11 @@ export default function AdminParticipantes() {
                         <input
                           type="checkbox"
                           checked={i.registrado_presencial}
-                          onChange={(e) => marcarPresencial(i.id, e.target.checked)}
+                          onChange={(e) => {
+                            const ficha = { inscripcion_id: i.id, nombre_completo: seleccionado.nombre_completo, participante_id: seleccionado.id, evento_id: i.evento_id, alTerminar: () => recargarDetalle(seleccionado.id) };
+                            if (e.target.checked) abrirCobro(ficha);
+                            else pedirDesmarcar(ficha, () => recargarDetalle(seleccionado.id));
+                          }}
                         />
                         Registrado presencial
                       </label>
@@ -1305,17 +1353,17 @@ export default function AdminParticipantes() {
               <input
                 type="text"
                 inputMode={seleccionado.tipo_identificacion === 'Pasaporte' ? 'text' : 'numeric'}
-                maxLength={seleccionado.tipo_identificacion === 'Pasaporte' ? 20 : 13}
+                maxLength={seleccionado.tipo_identificacion === 'Pasaporte' ? 20 : 17}
                 placeholder={seleccionado.tipo_identificacion === 'Código interno' ? 'Opcional: DNI de 13 dígitos' : ''}
-                value={formEditar.numero_identificacion}
+                value={seleccionado.tipo_identificacion === 'Pasaporte' ? formEditar.numero_identificacion : formatoDniEscribiendo(formEditar.numero_identificacion)}
                 onChange={(e) => {
                   setDuplicadoIdent(null);
                   const v = seleccionado.tipo_identificacion === 'Pasaporte'
                     ? e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20)
-                    : e.target.value.replace(/\D/g, '').slice(0, 13);
+                    : soloDigitosDni(e.target.value);
                   setFormEditar((f) => ({ ...f, numero_identificacion: v }));
                 }}
-                className={`${claseInput} font-mono tracking-wide ${errorIdentEditar || duplicadoIdent ? 'border-ember' : ''}`}
+                className={`${claseInput} font-bold ${errorIdentEditar || duplicadoIdent ? 'border-ember' : ''}`}
               />
               {seleccionado.tipo_identificacion !== 'Pasaporte' && (formEditar.numero_identificacion || '').length > 0 && (
                 <p className="mt-1 text-xs text-ink/40">{formEditar.numero_identificacion.length} / 13 dígitos</p>
@@ -1545,8 +1593,8 @@ export default function AdminParticipantes() {
             <label className="sm:col-span-2">
               <span className="mb-1 block text-xs font-semibold text-ink/60">DNI / número de identidad (opcional, 13 dígitos)</span>
               <input
-                type="text" inputMode="numeric" maxLength={13} value={formMenor.numero_identificacion}
-                onChange={(e) => setFormMenor((f) => ({ ...f, numero_identificacion: e.target.value.replace(/\D/g, '').slice(0, 13) }))}
+                type="text" inputMode="numeric" maxLength={17} value={formatoDniEscribiendo(formMenor.numero_identificacion)}
+                onChange={(e) => setFormMenor((f) => ({ ...f, numero_identificacion: soloDigitosDni(e.target.value) }))}
                 className={claseInput} placeholder="Si no lo trae, déjalo vacío y se le asigna un código MEN-"
               />
               <p className="mt-1 text-xs text-ink/40">Con DNI, el menor también podrá inscribirse solo desde el formulario público.</p>
@@ -1606,7 +1654,7 @@ export default function AdminParticipantes() {
       )}
 
       {avisoGuardado && (
-        <div className="fixed inset-x-4 bottom-6 z-[60] mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-[#007334] px-5 py-3.5 text-sm font-semibold text-white shadow-lg">
+        <div className="fixed inset-x-4 bottom-24 z-[60] md:bottom-6 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-[#007334] px-5 py-3.5 text-sm font-semibold text-white shadow-lg">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 text-base">✓</span>
           <span>{avisoGuardado}</span>
         </div>
@@ -1677,8 +1725,9 @@ export default function AdminParticipantes() {
       )}
 
       {cobrando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 sm:items-center sm:px-4">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-lg sm:max-w-md sm:rounded-2xl sm:p-6">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-ink/20 sm:hidden" />
             <h3 className="font-display text-lg font-bold text-ink">Módulo de cobro</h3>
             <p className="mt-1 text-sm text-ink/50">{cobrando.inscripcion.nombre_completo}</p>
             <p className="mt-1 text-xs text-ink/40">
@@ -1687,12 +1736,29 @@ export default function AdminParticipantes() {
             {error && <p className="mt-3 rounded-lg bg-ember/10 p-3 text-sm text-ember">{error}</p>}
 
             <div className="mt-4 space-y-4">
-              <label>
+              <div>
                 <span className="mb-1 block text-xs font-semibold text-ink/60">Inscripciones (Alimentación)</span>
+                {/* Celular: opciones grandes, fáciles de tocar */}
+                <div className="space-y-2 sm:hidden">
+                  {opcionesInscripcion.map((o) => {
+                    const sel = String(cobrando.cuentaId) === String(o.cuenta_id);
+                    return (
+                      <button
+                        key={o.cuenta_id} type="button"
+                        onClick={() => setCobrando((c) => ({ ...c, cuentaId: o.cuenta_id }))}
+                        className={`flex w-full items-center justify-between rounded-xl border-2 px-4 py-3.5 text-left text-base font-semibold ${sel ? 'border-[#007334] bg-[#007334]/10 text-[#007334]' : 'border-ink/15 text-night'}`}
+                      >
+                        <span>{sel ? '✓ ' : ''}{o.nombre}</span>
+                        <span>L. {o.monto}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* PC: lista desplegable, igual que antes */}
                 <select
                   value={cobrando.cuentaId}
                   onChange={(e) => setCobrando((c) => ({ ...c, cuentaId: e.target.value }))}
-                  className={claseInput}
+                  className={`${claseInput} hidden sm:block`}
                 >
                   <option value="">Seleccionar…</option>
                   {opcionesInscripcion.map((o) => (
@@ -1702,13 +1768,13 @@ export default function AdminParticipantes() {
                 {opcionesInscripcion.length === 0 && (
                   <p className="mt-1 text-xs text-ember">No hay cuentas de boletos ni Cortesía configuradas — ajústalas en Entradas de Efectivo.</p>
                 )}
-              </label>
+              </div>
 
               {(() => {
                 const opcionElegida = opcionesInscripcion.find((o) => String(o.cuenta_id) === String(cobrando.cuentaId));
                 const pideBanco = opcionElegida?.pideBanco;
                 return (
-                  <label>
+                  <label className="block">
                     <span className="mb-1 block text-xs font-semibold text-ink/60">Banco ó # de recibo</span>
                     <input
                       type="text" value={pideBanco ? cobrando.banco_o_recibo : ''}
@@ -1721,20 +1787,62 @@ export default function AdminParticipantes() {
                 );
               })()}
 
-              <label>
+              <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-ink/60">Observaciones</span>
                 <input type="text" value={cobrando.observaciones_pago} onChange={(e) => setCobrando((c) => ({ ...c, observaciones_pago: e.target.value }))} className={claseInput} />
               </label>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setCobrando(null)} className="rounded-full border border-ink/20 px-4 py-1.5 text-sm font-semibold text-ink/70 hover:bg-ink/5">
-                Cancelar
-              </button>
-              <button onClick={guardarCobro} disabled={guardandoCobro} className="rounded-full bg-[#007334] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#005c29] disabled:opacity-50">
-                {guardandoCobro ? 'Guardando…' : 'Guardar y confirmar'}
-              </button>
+            {(() => {
+              const op = opcionesInscripcion.find((o) => String(o.cuenta_id) === String(cobrando.cuentaId));
+              return (
+                <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                  <button
+                    onClick={() => { setResultadoCobro({ tipo: 'cancelado', nombre: cobrando.inscripcion.nombre_completo }); setCobrando(null); setError(''); }}
+                    className="rounded-full border border-ink/20 px-4 py-2.5 text-sm font-semibold text-ink/70 hover:bg-ink/5 sm:py-1.5"
+                  >
+                    Cancelar
+                  </button>
+                  <button onClick={guardarCobro} disabled={guardandoCobro} className="rounded-full bg-[#007334] px-4 py-3.5 text-base font-semibold text-white hover:bg-[#005c29] disabled:opacity-50 sm:py-1.5 sm:text-sm">
+                    {guardandoCobro ? 'Guardando…' : (
+                      <>
+                        <span className="sm:hidden">{op ? (op.monto > 0 ? `Cobrar L. ${op.monto} y registrar` : 'Registrar sin cobro') : 'Elige una opción'}</span>
+                        <span className="hidden sm:inline">Guardar y confirmar</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {resultadoCobro && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/50 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-lg">
+            <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full text-3xl font-bold text-white ${resultadoCobro.tipo === 'ok' ? 'bg-[#007334]' : resultadoCobro.tipo === 'cancelado' ? 'bg-ember' : 'bg-[#F59D24]'}`}>
+              {resultadoCobro.tipo === 'ok' ? '✓' : resultadoCobro.tipo === 'cancelado' ? '✕' : '!'}
             </div>
+            <h3 className="mt-4 font-display text-xl font-bold text-ink">
+              {resultadoCobro.tipo === 'ok' ? 'Registro confirmado' : resultadoCobro.tipo === 'cancelado' ? 'Registro cancelado' : 'No se pudo guardar'}
+            </h3>
+            <p className="mt-2 text-sm text-ink/60">
+              {resultadoCobro.tipo === 'ok' && `${resultadoCobro.nombre} quedó registrada.`}
+              {resultadoCobro.tipo === 'cancelado' && `No se cobró nada. ${resultadoCobro.nombre} sigue sin registrar.`}
+              {resultadoCobro.tipo === 'error' && `No se registró el cobro de ${resultadoCobro.nombre}. ${resultadoCobro.detalle || ''}`}
+            </p>
+            {resultadoCobro.tipo === 'ok' && resultadoCobro.detalle && (
+              <p className="mt-3 rounded-xl bg-parchment px-3 py-2 text-sm font-semibold text-ink">{resultadoCobro.detalle}</p>
+            )}
+            {resultadoCobro.tipo === 'error' ? (
+              <div className="mt-5 space-y-2">
+                <button autoFocus onClick={() => { setResultadoCobro(null); guardarCobro(); }} className="w-full rounded-xl bg-ember py-3 text-base font-semibold text-white">Reintentar</button>
+                <button onClick={() => setResultadoCobro(null)} className="w-full py-2 text-sm text-ink/60">Cerrar</button>
+              </div>
+            ) : (
+              <button autoFocus onClick={() => setResultadoCobro(null)} className={`mt-5 w-full rounded-xl py-3 text-base font-semibold text-white ${resultadoCobro.tipo === 'ok' ? 'bg-[#007334]' : 'bg-night'}`}>Aceptar</button>
+            )}
           </div>
         </div>
       )}

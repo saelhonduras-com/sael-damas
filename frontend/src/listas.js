@@ -41,6 +41,15 @@ export const MUNICIPIOS_POR_DEPARTAMENTO = {
 };
 
 // Quita la palabra "Zona" solo al MOSTRAR (el valor guardado no cambia).
+// DNI al ESCRIBIR: 13 dígitos se muestran como 0801-1990-12345 (guiones solos
+// después del 4.º y 8.º dígito). Lo que se guarda y se envía son siempre los
+// 13 dígitos corridos; los guiones son solo para escribirlo y leerlo mejor.
+export const soloDigitosDni = (v) => String(v || '').replace(/\D/g, '').slice(0, 13);
+export const formatoDniEscribiendo = (v) => {
+  const d = soloDigitosDni(v);
+  return [d.slice(0, 4), d.slice(4, 8), d.slice(8)].filter(Boolean).join('-');
+};
+
 export const nombreZona = (z) => String(z || '').replace(/^Zona\s+/i, '');
 
 // Zonas propias de SAEL Damas (estructura distinta a la de Jóvenes/Hombres).
@@ -115,9 +124,15 @@ export const CARGOS_FIHNEC = [
   "Coordinadora Nacional SFL",
   "Coordinadora Nacional Oración e Intercesión",
   "Coordinadora Nacional SAEL",
+  "Sub Coordinadora de SAEL",
   "Coordinadora de Membresía",
   "Coordinadora Nacional Capacitación",
   "Encargada de Eventos Estratégicos",
+  "Coordinadora de Grupo",
+  "Sub Coordinadora de Grupo",
+  "Secretaria de Grupo",
+  "Tesorera de Grupo",
+  "Regional de Zona",
   "Servidora",
 ];
 

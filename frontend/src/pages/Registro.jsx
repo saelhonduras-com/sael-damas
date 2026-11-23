@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import api, { mensajeError } from '../api';
 import {
   DEPARTAMENTOS_HONDURAS, MUNICIPIOS_POR_DEPARTAMENTO,
-  ZONAS_FIHNEC, nombreZona, ZONAS_POR_DEPARTAMENTO, CARGOS_FIHNEC, ESTADOS_CIVILES,
+  ZONAS_FIHNEC, nombreZona, soloDigitosDni, formatoDniEscribiendo, ZONAS_POR_DEPARTAMENTO, CARGOS_FIHNEC, ESTADOS_CIVILES,
 } from '../listas';
 import SelectorFecha from '../components/SelectorFecha';
 
@@ -704,13 +704,13 @@ export default function Registro() {
                   />
                 ) : (
                   <input
-                    type="text" inputMode="numeric" maxLength={13} value={form.dni}
-                    onChange={(e) => actualizar('dni', e.target.value.replace(/\D/g, ''))}
+                    type="text" inputMode="numeric" maxLength={17} value={formatoDniEscribiendo(form.dni)}
+                    onChange={(e) => actualizar('dni', soloDigitosDni(e.target.value))}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && form.dni.length === 13 && !cargando) verificarDni();
                     }}
                     className="w-full rounded-lg border border-ink/15 bg-white px-2 py-3 text-center font-display text-xl tracking-[0.08em] text-ink sm:px-3 sm:text-2xl sm:tracking-widest transition focus:border-ember focus:outline-none focus:ring-4 focus:ring-ember/10"
-                    placeholder="0801199012345"
+                    placeholder="0801-1990-12345"
                   />
                 )}
                 <span className="mt-2 block text-center text-base font-semibold text-ink/50">
