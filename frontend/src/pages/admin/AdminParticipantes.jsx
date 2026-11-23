@@ -827,7 +827,7 @@ export default function AdminParticipantes() {
 
                       <button
                         onClick={finalizarEventoActual}
-                        className="hidden rounded-full sm:block bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-ember-light"
+                        className="rounded-full bg-ember px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-ember-light"
                       >
                         Finalizar evento
                       </button>
